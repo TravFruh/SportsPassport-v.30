@@ -1,0 +1,8 @@
+Travis Stadium Passport v25 edits
+
+- Removed duplicate obsolete CBB entries: Long Island and Dixie State.
+- Added an Edits page to desktop tabs and mobile bottom navigation.
+- Team, conference, division, venue, city, state, capacity, and opened year can be edited locally.
+- Added manual/planned games for 2027 and future years through 2100.
+- Extended the normal visit season selector through 2100.
+- Team edits are included in backup exports and restored on import.

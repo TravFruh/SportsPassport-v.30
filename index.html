@@ -1,0 +1,145 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#111827" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <link rel="manifest" href="manifest.webmanifest" />
+  <link rel="icon" href="icon.svg" />
+  <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png" />
+  <title>Travis' Stadium Passport</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div>
+      <p class="eyebrow">PERSONAL SPORTS TRACKER</p>
+      <h1>Travis' Stadium Passport</h1>
+    </div>
+    <div class="header-actions"><button id="scheduleUpdateBtn" class="secondary">Update Schedules</button><button id="syncBtn" class="secondary">Cloud Sync</button><button id="installBtn" class="secondary" hidden>Install App</button><button id="backupBtn" class="secondary">Backup</button></div>
+  </header>
+
+  <main>
+    <section class="hero-note"><strong>Your lifetime venue checklist</strong><span>Tap any team to record a date and add pictures. Visited venues turn green.</span></section>
+    <section class="summary" id="summary"></section>
+
+    <nav class="tabs" id="tabs"></nav>
+
+    <section class="controls" id="controls">
+      <input id="search" type="search" placeholder="Search teams, venues, cities..." />
+      <select id="statusFilter">
+        <option value="all">All venues</option>
+        <option value="visited">Visited</option>
+        <option value="unvisited">Not visited</option>
+      </select>
+    </section>
+
+    <section id="content"></section>
+  </main>
+
+  <dialog id="detailDialog">
+    <form method="dialog" class="dialog-shell">
+      <button class="close" value="cancel" aria-label="Close">×</button>
+      <div id="detailContent"></div>
+    </form>
+  </dialog>
+
+
+  <dialog id="exteriorDialog" class="exterior-dialog">
+    <form method="dialog" class="dialog-shell exterior-shell">
+      <button class="close" value="cancel" aria-label="Close">×</button>
+      <div class="exterior-heading"><h2 id="exteriorTitle">Stadium exterior</h2><p id="exteriorDetails"></p></div>
+      <iframe id="exteriorFrame" class="exterior-frame" title="Exterior street view of stadium" loading="lazy" referrerpolicy="no-referrer-when-downgrade" allowfullscreen></iframe>
+      <p class="small exterior-note">Drag to look around. Street View depends on available road imagery near the venue.</p>
+      <a id="exteriorFallback" class="map-external-link" target="_blank" rel="noopener noreferrer">Open a larger view</a>
+    </form>
+  </dialog>
+
+  <dialog id="backupDialog">
+    <form method="dialog" class="dialog-shell compact">
+      <button class="close" value="cancel" aria-label="Close">×</button>
+      <h2>Backup & Restore</h2>
+      <p>Export your visits, notes, seat details, and photos into one backup file.</p>
+      <div class="stack">
+        <button type="button" id="exportBtn">Export backup</button>
+        <label class="file-button">Import backup<input type="file" id="importFile" accept="application/json" hidden></label>
+        <button type="button" id="resetBtn" class="danger">Reset all personal data</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="scheduleUpdateDialog">
+    <form method="dialog" class="dialog-shell compact">
+      <button class="close" value="cancel" aria-label="Close">×</button>
+      <h2>Schedule Updates</h2>
+      <p>Download fresh schedules through the Stadium Passport update service. Your visits, photos, notes, and scores are never changed.</p>
+      <div class="stack">
+        <label>League
+          <select id="scheduleUpdateSport">
+            <option value="NFL">NFL</option><option value="CFB">College Football</option><option value="MLB">MLB</option><option value="CBB">College Basketball</option><option value="NBA">NBA</option>
+          </select>
+        </label>
+        <label>Season<input id="scheduleUpdateSeason" type="number" min="2014" max="2100" step="1"></label>
+        <button type="button" id="runScheduleUpdate">Update selected league</button>
+        <button type="button" id="clearScheduleUpdates" class="secondary">Clear downloaded schedules</button>
+      </div>
+      <div id="scheduleUpdateProgress" class="schedule-update-progress" aria-live="polite">Choose a league and season, then tap Update.</div>
+      <p class="small">For college basketball, enter the starting year. For example, enter 2026 for the 2026–27 season.</p>
+    </form>
+  </dialog>
+
+  <dialog id="syncDialog">
+    <form method="dialog" class="dialog-shell compact">
+      <button class="close" value="cancel" aria-label="Close">×</button>
+      <h2>Cloud Sync</h2>
+      <p id="syncStatus">Not connected. Your device data remains local until you sign in.</p>
+      <div class="stack" id="syncAuthFields">
+        <label>Email<input id="syncEmail" type="email" autocomplete="email" placeholder="you@example.com"></label>
+        <label>Password<input id="syncPassword" type="password" autocomplete="current-password" minlength="6"></label>
+        <button type="button" id="syncSignIn">Sign in</button>
+        <button type="button" id="syncSignUp" class="secondary">Create account</button>
+      </div>
+      <div class="stack" id="syncConnectedFields" hidden>
+        <button type="button" id="syncNow">Sync now</button>
+        <button type="button" id="syncUpload" class="secondary">Upload this device</button>
+        <button type="button" id="syncDownload" class="secondary">Download cloud copy</button>
+        <button type="button" id="syncSignOut" class="danger-outline">Sign out</button>
+      </div>
+      <p class="small">Cloud sync uses the configured Supabase project. Personal visits and media are private to the signed-in account.</p>
+    </form>
+  </dialog>
+
+  <nav class="mobile-bottom-nav" id="mobileBottomNav" aria-label="Primary navigation">
+    <button type="button" data-mobile-action="overview" aria-label="Overview"><span class="nav-icon">⌂</span><span>Overview</span></button>
+    <button type="button" data-mobile-action="leagues" aria-label="Leagues"><span class="nav-icon">🏆</span><span>Leagues</span></button>
+    <button type="button" class="mobile-add-visit" data-mobile-action="add" aria-label="Add Visit"><span class="nav-add-icon">＋</span><span>Add Visit</span></button>
+    <button type="button" data-mobile-action="map" aria-label="Map"><span class="nav-icon">⌖</span><span>Map</span></button>
+    <button type="button" data-mobile-action="passport" aria-label="Passport"><span class="nav-icon">▣</span><span>Passport</span></button>
+    <button type="button" data-mobile-action="edits" aria-label="Edits"><span class="nav-icon">✎</span><span>Edits</span></button>
+  </nav>
+
+  <dialog id="addVisitDialog" class="add-visit-dialog">
+    <div class="dialog-shell add-visit-shell">
+      <button type="button" class="close" id="closeAddVisit" aria-label="Close">×</button>
+      <p class="eyebrow">NEW GAME VISIT</p>
+      <h2>Add Visit</h2>
+      <p class="small">Choose the team or venue you visited.</p>
+      <input id="addVisitSearch" type="search" placeholder="Search team, stadium, city..." autocomplete="off" />
+      <div class="add-visit-sports" id="addVisitSports"></div>
+      <div class="add-visit-results" id="addVisitResults"></div>
+      <button type="button" id="cancelAddVisit" class="add-visit-cancel">Cancel</button>
+    </div>
+  </dialog>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
+  <script src="sync-config.js"></script>
+  <script src="data.js"></script>
+<script src="college-logos.js"></script>
+  <script src="app.js"></script>
+  <script src="cloud-sync.js"></script>
+</body>
+</html>
