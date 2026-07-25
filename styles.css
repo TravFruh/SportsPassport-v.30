@@ -722,9 +722,15 @@ button.secondary{color:#fff;border-color:rgba(255,255,255,.5);background:rgba(8,
 /* v25: editable teams and future game planner */
 .edits-page{display:grid;gap:18px;max-width:980px;margin:0 auto}.edits-hero,.edit-panel{background:#fff;border:1px solid var(--line);border-radius:18px;padding:20px;box-shadow:0 3px 14px rgba(12,35,64,.08)}.edits-hero h2,.edit-panel h3{margin-top:0}.edit-panel>label,.edit-panel form label{display:grid;gap:6px;font-weight:700}.edit-panel select,.edit-panel input{width:100%;box-sizing:border-box}.edit-actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:6px}.edit-actions button{flex:1 1 180px}
 @media(max-width:600px){.mobile-bottom-nav{grid-template-columns:repeat(6,minmax(0,1fr));padding-left:3px;padding-right:3px}.mobile-bottom-nav button{font-size:9px}.mobile-bottom-nav .nav-icon{font-size:21px}.edits-page{gap:12px}.edits-hero,.edit-panel{padding:16px;border-radius:15px}.edit-actions{display:grid}.edit-actions button{width:100%}}
-/* Show the entire personal photo on the Overview page */
-.overview-mode .event-photo img,
-.overview-mode .event-photo .event-card-media {
+
+/* Smart Overview photo fit */
+.overview-mode .event-photo img.event-card-media.photo-fit-portrait {
   object-fit: contain !important;
-  background: #000;
+  object-position: center !important;
+  background: #111 !important;
+}
+.overview-mode .event-photo img.event-card-media.photo-fit-landscape {
+  object-fit: cover !important;
+  object-position: center !important;
+  background: #111 !important;
 }
