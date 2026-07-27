@@ -1,5 +1,5 @@
-const CACHE = 'stadium-passport-v25-photo-fix-v2';
-const ASSETS = ['./','./index.html','./styles.css','./app.js','./photo-fix.js','./data.js','./college-logos.js','./manifest.webmanifest','./icon.svg','./icon-192.png','./icon-512.png','./apple-touch-icon.png','./mac-logo.png','./liu-logo.png','./summit-league-logo.png','./tmf-header.png'];
+const CACHE = 'stadium-passport-v25-photo-cover-restore';
+const ASSETS = ['./','./index.html','./styles.css','./app.js','./data.js','./college-logos.js','./manifest.webmanifest','./icon.svg','./icon-192.png','./icon-512.png','./apple-touch-icon.png','./mac-logo.png','./liu-logo.png','./summit-league-logo.png','./tmf-header.png'];;
 
 self.addEventListener('install', event => {
   self.skipWaiting();
