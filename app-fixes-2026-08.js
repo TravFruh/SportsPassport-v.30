@@ -6,13 +6,8 @@
     'American': 'https://a.espncdn.com/i/teamlogos/ncaa_conf/500/151.png',
     'SEC': 'https://a.espncdn.com/i/teamlogos/ncaa_conf/500/8.png',
     'Pac-12': 'https://a.espncdn.com/i/teamlogos/ncaa_conf/500/9.png',
-    'WAC': 'https://a.espncdn.com/i/teamlogos/ncaa_conf/500/0.png'
+    'WAC': 'https://commons.wikimedia.org/wiki/Special:Redirect/file/WAC_current_logo.png'
   };
-
-  // WAC does not have a dependable current ESPN conference-logo asset in the
-  // existing data set. Use the conference's own current site favicon only as a
-  // fallback; the CSS below prevents it from being stretched/blurry.
-  conferenceLogoOverrides['WAC'] = 'https://www.google.com/s2/favicons?domain=wacsports.com&sz=128';
 
   const originalConferenceLogoUrl = window.conferenceLogoUrl;
   window.conferenceLogoUrl = function (sport, conference) {
