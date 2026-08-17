@@ -16,8 +16,6 @@
     return `https://www.google.com/s2/favicons?domain=${encodeURIComponent(conference || 'ncaa.com')}&sz=128`;
   };
 
-  // Fix the USC alias: the current data calls the CFB team "Southern California",
-  // which otherwise falls through to the generic California logo match.
   if (window.COLLEGE_LOGOS) {
     window.COLLEGE_LOGOS['southern california'] = 'https://a.espncdn.com/i/teamlogos/ncaa/500/30.png';
     window.COLLEGE_LOGOS['usc'] = 'https://a.espncdn.com/i/teamlogos/ncaa/500/30.png';
@@ -27,44 +25,24 @@
     window.COLLEGE_LOGOS['james madison'] = 'https://a.espncdn.com/i/teamlogos/ncaa/500/256.png';
   }
 
-  // Add the requested 2026 FBS schools if they are not already in the master list.
   const additions = [
-    {
-      id: 'CFB-166', sport: 'CFB', level: 'NCAA Football - FBS', conference: 'American', division: 'FBS',
-      team: 'UAB', venue: 'Protective Stadium', city: 'Birmingham', state: 'AL',
-      capacity: '45000', opened: '2021', lat: 33.5146, lng: -86.8135
-    },
-    {
-      id: 'CFB-167', sport: 'CFB', level: 'NCAA Football - FBS', conference: 'Mountain West', division: 'FBS',
-      team: 'North Dakota State', venue: 'Fargodome', city: 'Fargo', state: 'ND',
-      capacity: '18500', opened: '1992', lat: 46.8999, lng: -96.8059
-    },
-    {
-      id: 'CFB-168', sport: 'CFB', level: 'NCAA Football - FBS', conference: 'Sun Belt', division: 'FBS',
-      team: 'Coastal Carolina', venue: 'Brooks Stadium', city: 'Conway', state: 'SC',
-      capacity: '21000', opened: '2003', lat: 33.7944, lng: -79.0116
-    },
-    {
-      id: 'CFB-169', sport: 'CFB', level: 'NCAA Football - FBS', conference: 'Sun Belt', division: 'FBS',
-      team: 'James Madison', venue: 'Bridgeforth Stadium', city: 'Harrisonburg', state: 'VA',
-      capacity: '24877', opened: '1975', lat: 38.4322, lng: -78.8718
-    }
+    { id: 'CFB-166', sport: 'CFB', level: 'NCAA Football - FBS', conference: 'American', division: 'FBS', team: 'UAB', venue: 'Protective Stadium', city: 'Birmingham', state: 'AL', capacity: '45000', opened: '2021', lat: 33.5146, lng: -86.8135 },
+    { id: 'CFB-167', sport: 'CFB', level: 'NCAA Football - FBS', conference: 'Mountain West', division: 'FBS', team: 'North Dakota State', venue: 'Fargodome', city: 'Fargo', state: 'ND', capacity: '18500', opened: '1992', lat: 46.8999, lng: -96.8059 },
+    { id: 'CFB-168', sport: 'CFB', level: 'NCAA Football - FBS', conference: 'Sun Belt', division: 'FBS', team: 'Coastal Carolina', venue: 'Brooks Stadium', city: 'Conway', state: 'SC', capacity: '21000', opened: '2003', lat: 33.7944, lng: -79.0116 },
+    { id: 'CFB-169', sport: 'CFB', level: 'NCAA Football - FBS', conference: 'Sun Belt', division: 'FBS', team: 'James Madison', venue: 'Bridgeforth Stadium', city: 'Harrisonburg', state: 'VA', capacity: '24877', opened: '1975', lat: 38.4322, lng: -78.8718 }
   ];
 
   if (Array.isArray(window.STADIUMS)) {
     additions.forEach(team => {
-      if (!window.STADIUMS.some(x => x.id === team.id || (x.sport === team.sport && x.team === team.team))) {
-        window.STADIUMS.push(team);
-      }
+      if (!window.STADIUMS.some(x => x.id === team.id || (x.sport === team.sport && x.team === team.team))) window.STADIUMS.push(team);
     });
   }
 
-  // Make the conference badges use crisp, appropriately sized source images.
   const style = document.createElement('style');
   style.textContent = `
     .header-badge img { width: 100%; height: 100%; object-fit: contain; image-rendering: auto; }
-    .gallery-media { cursor: zoom-in; touch-action: pan-y; }
-    .sp-media-lightbox { position: fixed; inset: 0; z-index: 10000; background: rgba(0,0,0,.94); display:flex; align-items:center; justify-content:center; padding: 56px 54px 42px; }
+    .gallery-media { cursor: zoom-in !important; touch-action: pan-y; pointer-events: auto !important; }
+    .sp-media-lightbox { position: fixed; inset: 0; z-index: 100000; background: rgba(0,0,0,.94); display:flex; align-items:center; justify-content:center; padding: 56px 54px 42px; }
     .sp-media-lightbox[hidden] { display:none; }
     .sp-media-lightbox-stage { width:100%; height:100%; display:flex; align-items:center; justify-content:center; overflow:hidden; touch-action:pan-y; }
     .sp-media-lightbox img, .sp-media-lightbox video { max-width:100%; max-height:100%; object-fit:contain; border-radius:8px; box-shadow:0 10px 40px rgba(0,0,0,.45); }
@@ -89,7 +67,12 @@
       <div class="sp-media-counter" aria-live="polite"></div>
       <div class="sp-media-lightbox-stage"></div>
       <button type="button" class="sp-media-next" aria-label="Next photo">›</button>`;
-    document.body.appendChild(box);
+    // The visit overview is itself a native <dialog>. Put the lightbox inside
+    // that dialog's top layer so the first photo can be opened without first
+    // closing the underlying visit dialog.
+    const detailDialog = document.getElementById('detailDialog');
+    const host = detailDialog ? detailDialog.querySelector('.dialog-shell') || detailDialog : document.body;
+    host.appendChild(box);
     return box;
   }
 
@@ -114,14 +97,8 @@
       index = (i + items.length) % items.length;
       const source = items[index];
       stage.innerHTML = '';
-      let media;
-      if (source.tagName.toLowerCase() === 'video') {
-        media = document.createElement('video');
-        media.controls = true;
-        media.playsInline = true;
-      } else {
-        media = document.createElement('img');
-      }
+      const media = source.tagName.toLowerCase() === 'video' ? document.createElement('video') : document.createElement('img');
+      if (media.tagName.toLowerCase() === 'video') { media.controls = true; media.playsInline = true; }
       media.src = source.currentSrc || source.src;
       media.alt = source.alt || 'Visit photo';
       stage.appendChild(media);
@@ -139,23 +116,31 @@
       show(index);
     }
 
-    function closeBox() {
+    function closeBox(event) {
+      if (event) { event.preventDefault(); event.stopPropagation(); }
       box.hidden = true;
       stage.innerHTML = '';
       document.body.style.overflow = '';
     }
 
+    // Capture the tap before the native dialog/form can handle it. This is the
+    // key fix for the previous behavior where the parent dialog's close control
+    // had to be pressed before the viewer became visible.
     document.addEventListener('click', event => {
-      const media = event.target.closest('.gallery-item .gallery-media, .game-card-photo img, .game-card-photo video');
-      if (media) open(media);
-    });
-    close.onclick = closeBox;
-    prev.onclick = () => show(index - 1);
-    next.onclick = () => show(index + 1);
-    box.addEventListener('click', event => { if (event.target === box) closeBox(); });
+      const media = event.target.closest && event.target.closest('.gallery-item .gallery-media, .game-card-photo img, .game-card-photo video');
+      if (!media) return;
+      event.preventDefault();
+      event.stopPropagation();
+      open(media);
+    }, true);
+
+    close.addEventListener('click', closeBox);
+    prev.addEventListener('click', event => { event.preventDefault(); event.stopPropagation(); show(index - 1); });
+    next.addEventListener('click', event => { event.preventDefault(); event.stopPropagation(); show(index + 1); });
+    box.addEventListener('click', event => { if (event.target === box) closeBox(event); });
     document.addEventListener('keydown', event => {
       if (box.hidden) return;
-      if (event.key === 'Escape') closeBox();
+      if (event.key === 'Escape') closeBox(event);
       if (event.key === 'ArrowLeft') show(index - 1);
       if (event.key === 'ArrowRight') show(index + 1);
     });
@@ -171,8 +156,6 @@
 
   attachMediaViewer();
 
-  // Re-render once so the newly added CFB teams and logo aliases appear in all
-  // existing league/checklist views. Personal visit state remains in local storage.
   if (typeof window.render === 'function') {
     try { window.render(); } catch (err) { console.warn('SportsPassport targeted fixes render refresh failed', err); }
   }
