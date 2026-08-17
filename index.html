@@ -19,10 +19,10 @@
     #spLaunchCard .launch-eyebrow{margin:0 0 12px;font-size:12px;letter-spacing:.16em;font-weight:800;opacity:.72}
     #spLaunchCard h1{margin:0;font-size:clamp(34px,8vw,64px);line-height:1.02;letter-spacing:-.04em}
     #spLaunchCard p{margin:16px auto 0;max-width:520px;font-size:clamp(16px,3.8vw,21px);line-height:1.45;opacity:.82}
-    #spLaunchCover.sp-launch-out{pointer-events:none;animation:spLaunchFade .82s cubic-bezier(.2,.75,.25,1) forwards}
-    #spLaunchCover.sp-launch-out #spLaunchCard{animation:spLaunchZoom .9s cubic-bezier(.2,.75,.25,1) forwards}
+    #spLaunchCover.sp-launch-out{pointer-events:none;animation:spLaunchFade 4.82s cubic-bezier(.2,.75,.25,1) forwards}
+    #spLaunchCover.sp-launch-out #spLaunchCard{animation:spLaunchZoom 4.9s cubic-bezier(.2,.75,.25,1) forwards}
     @keyframes spLaunchZoom{0%{transform:scale(1);opacity:1}100%{transform:scale(.16) translateY(-48vh);opacity:0}}
-    @keyframes spLaunchFade{0%{opacity:1}72%{opacity:1}100%{opacity:0}}
+    @keyframes spLaunchFade{0%{opacity:1}90%{opacity:1}100%{opacity:0}}
     @media(prefers-reduced-motion:reduce){#spLaunchCover.sp-launch-out,#spLaunchCover.sp-launch-out #spLaunchCard{animation-duration:.15s}}
   </style>
 </head>
@@ -43,7 +43,7 @@
     if(!cover)return;
     try{sessionStorage.removeItem('spLaunchCoverPlayed');}catch(e){}
     setTimeout(function(){cover.classList.add('sp-launch-out');},300);
-    setTimeout(function(){cover.remove();},1250);
+    setTimeout(function(){cover.remove();},5250);
   })();
   </script>
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script><script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script><script src="sync-config.js"></script><script src="data.js"></script><script src="college-logos.js"></script><script src="app.js"></script><script src="app-fixes-2026-08.js"></script><script src="app-photo-gallery-2026-08.js"></script><script src="cloud-sync.js"></script>
