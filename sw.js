@@ -1,4 +1,4 @@
-const CACHE = 'stadium-passport-v27-photo-viewer-v3';
+const CACHE = 'stadium-passport-v28-photo-viewer-v4';
 const ASSETS = ['./','./index.html','./styles.css','./app.js','./data.js','./college-logos.js','./manifest.webmanifest','./icon.svg','./icon-192.png','./icon-512.png','./apple-touch-icon.png','./mac-logo.png','./liu-logo.png','./summit-league-logo.png','./tmf-header.png','./app-fixes-2026-08.js','./app-photo-gallery-2026-08-v2.js','./cloud-sync.js'];
 
 self.addEventListener('install', event => {
