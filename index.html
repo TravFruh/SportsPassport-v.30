@@ -13,39 +13,23 @@
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="" />
   <link rel="stylesheet" href="styles.css" />
   <style>
-    /* iPhone/PWA first-launch cover: deliberately lives in index.html so it can
-       paint before the application JS finishes loading. */
     #spLaunchCover{position:fixed;inset:0;z-index:2147483647;display:flex;align-items:center;justify-content:center;padding:24px;background:#111827;color:#fff;overflow:hidden;opacity:1;visibility:visible}
     #spLaunchCover[hidden]{display:none}
     #spLaunchCard{width:min(92vw,720px);box-sizing:border-box;text-align:center;padding:42px 28px;border-radius:28px;background:linear-gradient(145deg,#1f2937,#111827);box-shadow:0 24px 80px rgba(0,0,0,.45);transform:scale(1);opacity:1}
     #spLaunchCard .launch-eyebrow{margin:0 0 12px;font-size:12px;letter-spacing:.16em;font-weight:800;opacity:.72}
     #spLaunchCard h1{margin:0;font-size:clamp(34px,8vw,64px);line-height:1.02;letter-spacing:-.04em}
     #spLaunchCard p{margin:16px auto 0;max-width:520px;font-size:clamp(16px,3.8vw,21px);line-height:1.45;opacity:.82}
-    #spLaunchCover.sp-launch-out{pointer-events:none;animation:spLaunchFade .72s cubic-bezier(.2,.75,.25,1) forwards}
-    #spLaunchCover.sp-launch-out #spLaunchCard{animation:spLaunchZoom .82s cubic-bezier(.2,.75,.25,1) forwards}
+    #spLaunchCover.sp-launch-out{pointer-events:none;animation:spLaunchFade .82s cubic-bezier(.2,.75,.25,1) forwards}
+    #spLaunchCover.sp-launch-out #spLaunchCard{animation:spLaunchZoom .9s cubic-bezier(.2,.75,.25,1) forwards}
     @keyframes spLaunchZoom{0%{transform:scale(1);opacity:1}100%{transform:scale(.16) translateY(-48vh);opacity:0}}
     @keyframes spLaunchFade{0%{opacity:1}72%{opacity:1}100%{opacity:0}}
     @media(prefers-reduced-motion:reduce){#spLaunchCover.sp-launch-out,#spLaunchCover.sp-launch-out #spLaunchCard{animation-duration:.15s}}
   </style>
 </head>
 <body>
-  <div id="spLaunchCover" aria-hidden="true">
-    <div id="spLaunchCard">
-      <p class="launch-eyebrow">PERSONAL SPORTS TRACKER</p>
-      <h1>Travis' Stadium Passport</h1>
-      <p>Your lifetime venue checklist</p>
-    </div>
-  </div>
-  <header class="topbar">
-    <div><p class="eyebrow">PERSONAL SPORTS TRACKER</p><h1>Travis' Stadium Passport</h1></div>
-    <div class="header-actions"><button id="scheduleUpdateBtn" class="secondary">Update Schedules</button><button id="syncBtn" class="secondary">Cloud Sync</button><button id="installBtn" class="secondary" hidden>Install App</button><button id="backupBtn" class="secondary">Backup</button></div>
-  </header>
-  <main>
-    <section class="hero-note"><strong>Your lifetime venue checklist</strong><span>Tap any team to record a date and add pictures. Visited venues turn green.</span></section>
-    <section class="summary" id="summary"></section><nav class="tabs" id="tabs"></nav>
-    <section class="controls" id="controls"><input id="search" type="search" placeholder="Search teams, venues, cities..." /><select id="statusFilter"><option value="all">All venues</option><option value="visited">Visited</option><option value="unvisited">Not visited</option></select></section>
-    <section id="content"></section>
-  </main>
+  <div id="spLaunchCover" aria-hidden="true"><div id="spLaunchCard"><p class="launch-eyebrow">PERSONAL SPORTS TRACKER</p><h1>Travis' Stadium Passport</h1><p>Your lifetime venue checklist</p></div></div>
+  <header class="topbar"><div><p class="eyebrow">PERSONAL SPORTS TRACKER</p><h1>Travis' Stadium Passport</h1></div><div class="header-actions"><button id="scheduleUpdateBtn" class="secondary">Update Schedules</button><button id="syncBtn" class="secondary">Cloud Sync</button><button id="installBtn" class="secondary" hidden>Install App</button><button id="backupBtn" class="secondary">Backup</button></div></header>
+  <main><section class="hero-note"><strong>Your lifetime venue checklist</strong><span>Tap any team to record a date and add pictures. Visited venues turn green.</span></section><section class="summary" id="summary"></section><nav class="tabs" id="tabs"></nav><section class="controls" id="controls"><input id="search" type="search" placeholder="Search teams, venues, cities..." /><select id="statusFilter"><option value="all">All venues</option><option value="visited">Visited</option><option value="unvisited">Not visited</option></select></section><section id="content"></section></main>
   <dialog id="detailDialog"><form method="dialog" class="dialog-shell"><button class="close" value="cancel" aria-label="Close">×</button><div id="detailContent"></div></form></dialog>
   <dialog id="exteriorDialog" class="exterior-dialog"><form method="dialog" class="dialog-shell exterior-shell"><button class="close" value="cancel" aria-label="Close">×</button><div class="exterior-heading"><h2 id="exteriorTitle">Stadium exterior</h2><p id="exteriorDetails"></p></div><iframe id="exteriorFrame" class="exterior-frame" title="Exterior street view of stadium" loading="lazy" referrerpolicy="no-referrer-when-downgrade" allowfullscreen></iframe><p class="small exterior-note">Drag to look around. Street View depends on available road imagery near the venue.</p><a id="exteriorFallback" class="map-external-link" target="_blank" rel="noopener noreferrer">Open a larger view</a></form></dialog>
   <dialog id="backupDialog"><form method="dialog" class="dialog-shell compact"><button class="close" value="cancel" aria-label="Close">×</button><h2>Backup & Restore</h2><p>Export your visits, notes, seat details, and photos into one backup file.</p><div class="stack"><button type="button" id="exportBtn">Export backup</button><label class="file-button">Import backup<input type="file" id="importFile" accept="application/json" hidden></label><button type="button" id="resetBtn" class="danger">Reset all personal data</button></div></form></dialog>
@@ -54,20 +38,13 @@
   <nav class="mobile-bottom-nav" id="mobileBottomNav" aria-label="Primary navigation"><button type="button" data-mobile-action="overview" aria-label="Overview"><span class="nav-icon">⌂</span><span>Overview</span></button><button type="button" data-mobile-action="leagues" aria-label="Leagues"><span class="nav-icon">🏆</span><span>Leagues</span></button><button type="button" class="mobile-add-visit" data-mobile-action="add" aria-label="Add Visit"><span class="nav-add-icon">＋</span><span>Add Visit</span></button><button type="button" data-mobile-action="map" aria-label="Map"><span class="nav-icon">⌖</span><span>Map</span></button><button type="button" data-mobile-action="passport" aria-label="Passport"><span class="nav-icon">▣</span><span>Passport</span></button><button type="button" data-mobile-action="edits" aria-label="Edits"><span class="nav-icon">✎</span><span>Edits</span></button></nav>
   <dialog id="addVisitDialog" class="add-visit-dialog"><div class="dialog-shell add-visit-shell"><button type="button" class="close" id="closeAddVisit" aria-label="Close">×</button><p class="eyebrow">NEW GAME VISIT</p><h2>Add Visit</h2><p class="small">Choose the team or venue you visited.</p><input id="addVisitSearch" type="search" placeholder="Search team, stadium, city..." autocomplete="off" /><div class="add-visit-sports" id="addVisitSports"></div><div class="add-visit-results" id="addVisitResults"></div><button type="button" id="cancelAddVisit" class="add-visit-cancel">Cancel</button></div></dialog>
   <script>
-    (function(){
-      var cover=document.getElementById('spLaunchCover');
-      var key='stadiumPassportLaunchCoverShownV1';
-      var shown=false;
-      try{shown=localStorage.getItem(key)==='1';}catch(e){}
-      function finish(){
-        if(!cover)return;
-        cover.classList.add('sp-launch-out');
-        setTimeout(function(){cover.hidden=true;},850);
-      }
-      if(shown){cover.hidden=true;return;}
-      try{localStorage.setItem(key,'1');}catch(e){}
-      setTimeout(finish,650);
-    })();
+  (function(){
+    var cover=document.getElementById('spLaunchCover');
+    if(!cover)return;
+    try{sessionStorage.removeItem('spLaunchCoverPlayed');}catch(e){}
+    setTimeout(function(){cover.classList.add('sp-launch-out');},300);
+    setTimeout(function(){cover.remove();},1250);
+  })();
   </script>
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script><script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script><script src="sync-config.js"></script><script src="data.js"></script><script src="college-logos.js"></script><script src="app.js"></script><script src="app-fixes-2026-08.js"></script><script src="app-photo-gallery-2026-08.js"></script><script src="cloud-sync.js"></script>
 </body>
