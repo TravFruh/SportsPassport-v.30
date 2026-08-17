@@ -1,5 +1,5 @@
-const CACHE = 'stadium-passport-v25-photo-cover-restore';
-const ASSETS = ['./','./index.html','./styles.css','./app.js','./data.js','./college-logos.js','./manifest.webmanifest','./icon.svg','./icon-192.png','./icon-512.png','./apple-touch-icon.png','./mac-logo.png','./liu-logo.png','./summit-league-logo.png','./tmf-header.png'];;
+const CACHE = 'stadium-passport-v26-photo-viewer-v2';
+const ASSETS = ['./','./index.html','./styles.css','./app.js','./data.js','./college-logos.js','./manifest.webmanifest','./icon.svg','./icon-192.png','./icon-512.png','./apple-touch-icon.png','./mac-logo.png','./liu-logo.png','./summit-league-logo.png','./tmf-header.png','./app-fixes-2026-08.js','./app-photo-gallery-2026-08-v2.js','./cloud-sync.js'];
 
 self.addEventListener('install', event => {
   self.skipWaiting();
