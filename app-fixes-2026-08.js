@@ -150,7 +150,6 @@
 
   attachMediaViewer();
 
-  // Visit-history integrity and selection fix.
   function makeVisitId(stadiumId, index) {
     const base = String(stadiumId || 'stadium');
     if (window.crypto && typeof window.crypto.randomUUID === 'function') return `v-${base}-${window.crypto.randomUUID()}`;
@@ -187,7 +186,11 @@
   if (typeof originalOpenDetail === 'function') {
     let openChain = Promise.resolve();
     window.openDetail = function (stadiumId, visitId) {
-      repairVisitIds();
+      const repaired = repairVisitIds();
+      if (repaired) {
+        window.location.reload();
+        return Promise.resolve();
+      }
       const run = openChain.then(async () => {
         const result = await originalOpenDetail(stadiumId, visitId || '');
         const content = document.getElementById('detailContent');
@@ -211,7 +214,11 @@
     }, true);
   }
 
-  repairVisitIds();
+  const repairedOnLoad = repairVisitIds();
+  if (repairedOnLoad) {
+    window.location.reload();
+    return;
+  }
 
   if (typeof window.render === 'function') {
     try { window.render(); } catch (err) { console.warn('SportsPassport targeted fixes render refresh failed', err); }
