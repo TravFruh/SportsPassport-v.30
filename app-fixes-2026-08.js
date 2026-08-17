@@ -67,9 +67,6 @@
       <div class="sp-media-counter" aria-live="polite"></div>
       <div class="sp-media-lightbox-stage"></div>
       <button type="button" class="sp-media-next" aria-label="Next photo">›</button>`;
-    // The visit overview is itself a native <dialog>. Put the lightbox inside
-    // that dialog's top layer so the first photo can be opened without first
-    // closing the underlying visit dialog.
     const detailDialog = document.getElementById('detailDialog');
     const host = detailDialog ? detailDialog.querySelector('.dialog-shell') || detailDialog : document.body;
     host.appendChild(box);
@@ -123,9 +120,6 @@
       document.body.style.overflow = '';
     }
 
-    // Capture the tap before the native dialog/form can handle it. This is the
-    // key fix for the previous behavior where the parent dialog's close control
-    // had to be pressed before the viewer became visible.
     document.addEventListener('click', event => {
       const media = event.target.closest && event.target.closest('.gallery-item .gallery-media, .game-card-photo img, .game-card-photo video');
       if (!media) return;
@@ -155,6 +149,69 @@
   }
 
   attachMediaViewer();
+
+  // Visit-history integrity and selection fix.
+  function makeVisitId(stadiumId, index) {
+    const base = String(stadiumId || 'stadium');
+    if (window.crypto && typeof window.crypto.randomUUID === 'function') return `v-${base}-${window.crypto.randomUUID()}`;
+    return `v-${base}-${Date.now()}-${index}-${Math.random().toString(36).slice(2, 10)}`;
+  }
+
+  function repairVisitIds() {
+    let state;
+    try { state = JSON.parse(localStorage.getItem('stadiumPassportState') || '{}'); } catch { return false; }
+    let changed = false;
+    Object.entries(state).forEach(([stadiumId, record]) => {
+      if (!record || !Array.isArray(record.visits)) return;
+      const seen = new Set();
+      record.visits.forEach((visit, index) => {
+        if (!visit || typeof visit !== 'object') return;
+        const id = String(visit.id || '').trim();
+        if (!id || seen.has(id)) { visit.id = makeVisitId(stadiumId, index); changed = true; }
+        seen.add(visit.id);
+      });
+    });
+    if (changed) {
+      localStorage.setItem('stadiumPassportState', JSON.stringify(state));
+      localStorage.setItem('stadiumPassportLocalUpdatedAt', new Date().toISOString());
+      window.StadiumCloud?.scheduleSync?.();
+    }
+    return changed;
+  }
+
+  function getCurrentStadiumId() {
+    return document.getElementById('detailContent')?.dataset?.stadiumId || '';
+  }
+
+  const originalOpenDetail = window.openDetail;
+  if (typeof originalOpenDetail === 'function') {
+    let openChain = Promise.resolve();
+    window.openDetail = function (stadiumId, visitId) {
+      repairVisitIds();
+      const run = openChain.then(async () => {
+        const result = await originalOpenDetail(stadiumId, visitId || '');
+        const content = document.getElementById('detailContent');
+        if (content) content.dataset.stadiumId = stadiumId;
+        return result;
+      });
+      openChain = run.catch(() => {});
+      return run;
+    };
+
+    document.addEventListener('click', function (event) {
+      const item = event.target.closest && event.target.closest('.visit-history-item');
+      if (!item) return;
+      const stadiumId = getCurrentStadiumId();
+      const visitId = item.dataset.visitId || '';
+      if (!stadiumId || !visitId) return;
+      event.preventDefault();
+      event.stopPropagation();
+      event.stopImmediatePropagation?.();
+      window.openDetail(stadiumId, visitId);
+    }, true);
+  }
+
+  repairVisitIds();
 
   if (typeof window.render === 'function') {
     try { window.render(); } catch (err) { console.warn('SportsPassport targeted fixes render refresh failed', err); }
