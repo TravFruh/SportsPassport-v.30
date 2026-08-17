@@ -13,16 +13,16 @@
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="" />
   <link rel="stylesheet" href="styles.css" />
   <style>
-    #spLaunchCover{position:fixed;inset:0;z-index:2147483647;display:flex;align-items:center;justify-content:center;padding:14px;background:#111827;color:#fff;overflow:hidden;opacity:1;visibility:visible}
+    #spLaunchCover{position:fixed;inset:0;z-index:2147483647;display:flex;align-items:center;justify-content:center;padding:14px;background:rgba(17,24,39,.88);backdrop-filter:blur(3px);-webkit-backdrop-filter:blur(3px);color:#fff;overflow:hidden;opacity:1;visibility:visible}
     #spLaunchCover[hidden]{display:none}
-    #spLaunchCard{width:min(96vw,820px);box-sizing:border-box;text-align:center;padding:50px 24px;border-radius:28px;background:linear-gradient(145deg,#1f2937,#111827);box-shadow:0 24px 80px rgba(0,0,0,.45);transform:scale(1);opacity:1}
+    #spLaunchCard{width:min(96vw,820px);box-sizing:border-box;text-align:center;padding:50px 24px;border-radius:28px;background:rgba(31,41,55,.94);box-shadow:0 24px 80px rgba(0,0,0,.45);transform:scale(1);opacity:1}
     #spLaunchCard .launch-eyebrow{margin:0 0 12px;font-size:12px;letter-spacing:.16em;font-weight:800;opacity:.72}
     #spLaunchCard h1{margin:0;font-size:clamp(36px,9vw,68px);line-height:1.02;letter-spacing:-.04em}
     #spLaunchLogo{display:block;width:min(48vw,260px);height:min(48vw,260px);object-fit:contain;margin:26px auto 0;border-radius:22px}
     #spLaunchCover.sp-launch-out{pointer-events:none;animation:spLaunchFade 5.82s cubic-bezier(.2,.75,.25,1) forwards}
     #spLaunchCover.sp-launch-out #spLaunchCard{animation:spLaunchZoom 5.9s cubic-bezier(.2,.75,.25,1) forwards}
     @keyframes spLaunchZoom{0%,68%{transform:scale(1);opacity:1}100%{transform:scale(.16) translateY(-48vh);opacity:0}}
-    @keyframes spLaunchFade{0%,88%{opacity:1}100%{opacity:0}}
+    @keyframes spLaunchFade{0%,55%{opacity:1}78%{opacity:.76}90%{opacity:.42}100%{opacity:0}}
     @media(prefers-reduced-motion:reduce){#spLaunchCover.sp-launch-out,#spLaunchCover.sp-launch-out #spLaunchCard{animation-duration:.15s}}
   </style>
 </head>
@@ -38,13 +38,7 @@
   <nav class="mobile-bottom-nav" id="mobileBottomNav" aria-label="Primary navigation"><button type="button" data-mobile-action="overview" aria-label="Overview"><span class="nav-icon">⌂</span><span>Overview</span></button><button type="button" data-mobile-action="leagues" aria-label="Leagues"><span class="nav-icon">🏆</span><span>Leagues</span></button><button type="button" class="mobile-add-visit" data-mobile-action="add" aria-label="Add Visit"><span class="nav-add-icon">＋</span><span>Add Visit</span></button><button type="button" data-mobile-action="map" aria-label="Map"><span class="nav-icon">⌖</span><span>Map</span></button><button type="button" data-mobile-action="passport" aria-label="Passport"><span class="nav-icon">▣</span><span>Passport</span></button><button type="button" data-mobile-action="edits" aria-label="Edits"><span class="nav-icon">✎</span><span>Edits</span></button></nav>
   <dialog id="addVisitDialog" class="add-visit-dialog"><div class="dialog-shell add-visit-shell"><button type="button" class="close" id="closeAddVisit" aria-label="Close">×</button><p class="eyebrow">NEW GAME VISIT</p><h2>Add Visit</h2><p class="small">Choose the team or venue you visited.</p><input id="addVisitSearch" type="search" placeholder="Search team, stadium, city..." autocomplete="off" /><div class="add-visit-sports" id="addVisitSports"></div><div class="add-visit-results" id="addVisitResults"></div><button type="button" id="cancelAddVisit" class="add-visit-cancel">Cancel</button></div></dialog>
   <script>
-  (function(){
-    var cover=document.getElementById('spLaunchCover');
-    if(!cover)return;
-    try{sessionStorage.removeItem('spLaunchCoverPlayed');}catch(e){}
-    setTimeout(function(){cover.classList.add('sp-launch-out');},300);
-    setTimeout(function(){cover.remove();},6350);
-  })();
+  (function(){var cover=document.getElementById('spLaunchCover');if(!cover)return;try{sessionStorage.removeItem('spLaunchCoverPlayed');}catch(e){}setTimeout(function(){cover.classList.add('sp-launch-out');},300);setTimeout(function(){cover.remove();},6350);})();
   </script>
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script><script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js" crossorigin="anonymous"></script><script src="sync-config.js"></script><script src="data.js"></script><script src="college-logos.js"></script><script src="app.js"></script><script src="app-fixes-2026-08.js"></script><script src="app-photo-gallery-2026-08.js"></script><script src="cloud-sync.js"></script>
 </body>
