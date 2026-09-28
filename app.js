@@ -32,8 +32,13 @@ function visitPhotoKey(stadiumId,visitId){return `${stadiumId}::${visitId}`;}
 function visitTicketKey(stadiumId,visitId){return `ticket::${stadiumId}::${visitId}`;}
 function newVisitId(){return `v${Date.now()}${Math.random().toString(36).slice(2,7)}`;}
 function formatDate(date){ return date ? new Date(`${date}T12:00:00`).toLocaleDateString(undefined,{year:'numeric',month:'long',day:'numeric'}) : "Date not entered"; }
-function isVideoMedia(src){return typeof src==='string'&&src.startsWith('data:video/');}
-function mediaElement(src,alt,classes=''){return isVideoMedia(src)?`<video class="${classes}" src="${src}" controls playsinline preload="metadata" aria-label="${escapeHtml(alt)}"></video>`:`<img class="${classes}" src="${src}" alt="${escapeHtml(alt)}">`; }
+const videoObjectUrls=new Map();
+function isVideoMedia(src){return typeof src==='string'&&(src.startsWith('data:video/')||src.startsWith('blob:'));}
+function mediaElement(src,alt,classes=''){
+  return isVideoMedia(src)
+    ? `<video class="${classes}" src="${escapeHtml(src)}" controls playsinline preload="metadata" aria-label="${escapeHtml(alt)}"></video>`
+    : `<img class="${classes}" src="${escapeHtml(src)}" alt="${escapeHtml(alt)}">`;
+}
 function readFileAsDataURL(file){return new Promise((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve(reader.result);reader.onerror=()=>reject(reader.error||new Error('Unable to read file'));reader.readAsDataURL(file);});}
 
 const dbPromise = new Promise((resolve,reject)=>{
@@ -41,8 +46,59 @@ const dbPromise = new Promise((resolve,reject)=>{
   req.onupgradeneeded=()=>req.result.createObjectStore("photos");
   req.onsuccess=()=>resolve(req.result); req.onerror=()=>reject(req.error);
 });
-async function putPhotos(id,photos){const db=await dbPromise;return new Promise((res,rej)=>{const tx=db.transaction("photos","readwrite");tx.objectStore("photos").put(photos,id);tx.oncomplete=()=>{markLocalChanged();res();};tx.onerror=()=>rej(tx.error);});}
-async function getPhotos(id){const db=await dbPromise;return new Promise((res,rej)=>{const req=db.transaction("photos").objectStore("photos").get(id);req.onsuccess=()=>{const v=req.result;res(Array.isArray(v)?v:(v?[v]:[]));};req.onerror=()=>rej(req.error);});}
+async function putPhotos(id,photos){
+  const db=await dbPromise;
+  const stored=(Array.isArray(photos)?photos:[]).map(item=>{
+    if(typeof item==='string'&&item.startsWith('blob:')&&videoObjectUrls.has(item)) return videoObjectUrls.get(item);
+    return item;
+  });
+  return new Promise((res,rej)=>{const tx=db.transaction("photos","readwrite");tx.objectStore("photos").put(stored,id);tx.oncomplete=()=>{markLocalChanged();res();};tx.onerror=()=>rej(tx.error);});
+}
+async function getPhotos(id){
+  const db=await dbPromise;
+  return new Promise((res,rej)=>{
+    const req=db.transaction("photos").objectStore("photos").get(id);
+    req.onsuccess=async()=>{
+      const raw=req.result;
+      const items=Array.isArray(raw)?raw:(raw?[raw]:[]);
+      const display=[];
+      let migrated=false;
+      for(const item of items){
+        if(item&&typeof item==='object'&&item.kind==='video'&&item.blob instanceof Blob){
+          const url=URL.createObjectURL(item.blob);
+          videoObjectUrls.set(url,item);
+          display.push(url);
+          continue;
+        }
+        if(typeof item==='string'&&item.startsWith('data:video/')){
+          try{
+            const blob=await fetch(item).then(r=>r.blob());
+            const record={kind:'video',id:(crypto.randomUUID?.()||`video-${Date.now()}-${Math.random()}`),mime:blob.type||item.slice(5,item.indexOf(';')),blob};
+            const url=URL.createObjectURL(blob);
+            videoObjectUrls.set(url,record);
+            display.push(url);
+            items[items.indexOf(item)]=record;
+            migrated=true;
+          }catch{display.push(item);}
+        }else{
+          display.push(item);
+        }
+      }
+      if(migrated){
+        try{
+          await new Promise((resolve,reject)=>{
+            const tx=db.transaction("photos","readwrite");
+            tx.objectStore("photos").put(items,id);
+            tx.oncomplete=resolve;
+            tx.onerror=()=>reject(tx.error);
+          });
+        }catch(e){console.warn('Video migration could not be saved',e);}
+      }
+      res(display);
+    };
+    req.onerror=()=>rej(req.error);
+  });
+}
 async function allPhotos(){const db=await dbPromise;return new Promise((res,rej)=>{const out={};const store=db.transaction("photos").objectStore("photos");const req=store.openCursor();req.onsuccess=e=>{const c=e.target.result;if(c){out[c.key]=c.value;c.continue()}else res(out)};req.onerror=()=>rej(req.error);});}
 
 function renderTabs(){
@@ -856,7 +912,7 @@ async function openDetail(id,selectedVisitId=""){
     $("#detailContent").querySelectorAll('.visit-history-item').forEach(b=>b.onclick=()=>{activeId=b.dataset.visitId;draw();});
     const add=$("#addVisit");if(add)add.onclick=()=>{activeId='';draw();};
     const wireGallery=()=>{$("#photoGallery").innerHTML=gallery();$("#photoGallery").querySelectorAll('.remove-photo').forEach(b=>b.onclick=async()=>{photos.splice(Number(b.dataset.index),1);await putPhotos(visitPhotoKey(id,visit.id),photos);wireGallery();});};wireGallery();
-    $("#photoInput").onchange=async ev=>{const files=[...ev.target.files];if(!files.length)return;try{for(const f of files){if(f.type.startsWith('video/')){if(f.size>100*1024*1024){alert(`${f.name} is larger than 100 MB and was not added.`);continue;}photos.push(await readFileAsDataURL(f));}else if(f.type.startsWith('image/')){photos.push(await resizeImage(f,1200,.82));}}await putPhotos(visitPhotoKey(id,visit.id),photos);wireGallery();}catch(err){console.error(err);alert('One or more files could not be added.');}finally{ev.target.value='';}};
+    $("#photoInput").onchange=async ev=>{const files=[...ev.target.files];if(!files.length)return;try{for(const f of files){if(f.type.startsWith('video/')){if(f.size>100*1024*1024){alert(`${f.name} is larger than 100 MB and was not added.`);continue;}const blob=await f.arrayBuffer().then(buf=>new Blob([buf],{type:f.type||'video/mp4'}));const record={kind:'video',id:(crypto.randomUUID?.()||`video-${Date.now()}-${Math.random()}`),mime:f.type||blob.type||'video/mp4',blob};const url=URL.createObjectURL(blob);videoObjectUrls.set(url,record);photos.push(url);}else if(f.type.startsWith('image/')){photos.push(await resizeImage(f,1200,.82));}}await putPhotos(visitPhotoKey(id,visit.id),photos);wireGallery();}catch(err){console.error(err);alert('One or more files could not be added.');}finally{ev.target.value='';}};
     const wireTicket=()=>{const box=$("#ticketPreview");box.innerHTML=ticketScans.length?`<div class="ticket-scan-card"><img src="${ticketScans[0]}" alt="Ticket scan for ${escapeHtml(x.team)}"><button type="button" id="removeTicket" class="danger-outline">Remove ticket scan</button></div>`:'<div class="ticket-empty">No ticket scan attached</div>';const remove=$("#removeTicket");if(remove)remove.onclick=async()=>{ticketScans=[];await putPhotos(visitTicketKey(id,visit.id),ticketScans);wireTicket();};};wireTicket();
     $("#ticketInput").onchange=async ev=>{const f=ev.target.files[0];if(!f)return;ticketScans=[await resizeImage(f,1600,.86)];await putPhotos(visitTicketKey(id,visit.id),ticketScans);wireTicket();ev.target.value='';};
 
