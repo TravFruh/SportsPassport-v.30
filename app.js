@@ -283,7 +283,8 @@ const CONFERENCE_LOGO_DOMAINS={
 const SPORT_LOGO_DOMAINS={NFL:"nfl.com",MLB:"mlb.com",NBA:"nba.com",CFB:"ncaa.com",CBB:"ncaa.com"};
 const CONFERENCE_LOGO_OVERRIDES={
   "MAC":"./mac-logo.png",
-  "Summit":"./summit-league-logo.png"
+  "Summit":"./summit-league-logo.png",
+  "Mountain West":"https://static.cdnlogo.com/logos/m/20/mountain-west-conference.svg"
 };
 function conferenceLogoUrl(sport,conference){
   if(CONFERENCE_LOGO_OVERRIDES[conference]) return CONFERENCE_LOGO_OVERRIDES[conference];
