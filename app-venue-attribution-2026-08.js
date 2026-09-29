@@ -11,7 +11,7 @@
     return stadiums;
   }
   function readState(){try{return JSON.parse(localStorage.getItem(STATE_KEY)||'{}')}catch(e){return {}}}
-  function writeState(state){localStorage.setItem(STATE_KEY,JSON.stringify(state));localStorage.setItem('stadiumPassportLocalUpdatedAt',new Date().toISOString());}
+  function writeState(state){if(typeof window.safeSetItem==='function'||typeof safeSetItem==='function'){if(!safeSetItem(STATE_KEY,JSON.stringify(state)))throw new Error('Storage full');}else localStorage.setItem(STATE_KEY,JSON.stringify(state));localStorage.setItem('stadiumPassportLocalUpdatedAt',new Date().toISOString());}
   function esc(v){return String(v??'').replace(/[&<>'"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]));}
   function keyLabel(x){return `${x.team} — ${x.venue} · ${x.city}${x.state?', '+x.state:''}`;}
   function findCurrentVisit(){

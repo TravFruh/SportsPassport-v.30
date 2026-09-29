@@ -5,17 +5,44 @@ let activeSport = "OVERVIEW";
 let lastLeagueSport = "NFL";
 let addVisitSport = "NFL";
 let currentMap = null;
+/* Storage fix: schedule data used to live in localStorage and could fill the browser's ~5 MB quota,
+   which made every later "Save visit" fail silently. Schedules now live in IndexedDB, and any
+   old schedule entries are moved out of localStorage before anything else runs. */
+const LEGACY_SCHEDULE_PREFIXES=["stadiumPassportScheduleV22_2:","stadiumPassportDownloadedScheduleV24_2:"];
+const legacyDownloadedSchedules=[];
+(function freeLegacyScheduleStorage(){
+  try{
+    for(let i=localStorage.length-1;i>=0;i--){
+      const key=localStorage.key(i);if(!key)continue;
+      if(key.startsWith("stadiumPassportDownloadedScheduleV24_2:")){legacyDownloadedSchedules.push([key,localStorage.getItem(key)]);localStorage.removeItem(key);}
+      else if(key.startsWith("stadiumPassportScheduleV22_2:"))localStorage.removeItem(key);
+    }
+  }catch(e){console.warn("Could not clean up old schedule storage",e);}
+})();
+try{navigator.storage?.persist?.();}catch(e){}
+let storageWarningShown=false;
+function safeSetItem(key,value){
+  try{localStorage.setItem(key,value);return true;}
+  catch(err){
+    try{for(let i=localStorage.length-1;i>=0;i--){const k=localStorage.key(i);if(k&&(LEGACY_SCHEDULE_PREFIXES.some(p=>k.startsWith(p))||k==="stadiumPassportLogoCacheV2"))localStorage.removeItem(k);}localStorage.setItem(key,value);return true;}
+    catch(err2){
+      console.error("Saving to device storage failed",err2);
+      if(!storageWarningShown){storageWarningShown=true;alert("Your visit could not be saved because this device's storage for the app is full. Use Backup → Export backup now so nothing is lost, then free up space on your phone.");}
+      return false;
+    }
+  }
+}
 const state = JSON.parse(localStorage.getItem("stadiumPassportState") || "{}");
 const teamEdits = JSON.parse(localStorage.getItem("stadiumPassportTeamEdits") || "{}");
 function applyTeamEdits(){
   STADIUMS.forEach(team=>{const edit=teamEdits[team.id];if(edit)Object.assign(team,edit);});
 }
-function saveTeamEdits(){localStorage.setItem("stadiumPassportTeamEdits",JSON.stringify(teamEdits));markLocalChanged();}
+function saveTeamEdits(){if(safeSetItem("stadiumPassportTeamEdits",JSON.stringify(teamEdits)))markLocalChanged();}
 applyTeamEdits();
 const $ = s => document.querySelector(s);
 
-function markLocalChanged(){localStorage.setItem("stadiumPassportLocalUpdatedAt",new Date().toISOString());window.StadiumCloud?.scheduleSync?.();}
-function saveState(){ localStorage.setItem("stadiumPassportState", JSON.stringify(state)); markLocalChanged(); }
+function markLocalChanged(){safeSetItem("stadiumPassportLocalUpdatedAt",new Date().toISOString());window.StadiumCloud?.scheduleSync?.();}
+function saveState(){ const ok=safeSetItem("stadiumPassportState", JSON.stringify(state)); if(ok)markLocalChanged(); return ok; }
 function emptyVisit(){return {id:"",date:"",season:"",gameSport:"",opponent:"",opponentMascot:"",teamName:"",teamMascot:"",teamScore:"",opponentScore:"",outcome:"",gameId:"",gameLabel:"",eventName:"",eventType:"Regular Season",neutralSite:false,venueId:"",section:"",row:"",seat:"",memory:"",notes:""};}
 function getVisits(id){
   const record=state[id];
@@ -696,12 +723,21 @@ async function renderPersonalRecords(){
 }
 const DOWNLOADED_SCHEDULE_PREFIX = "stadiumPassportDownloadedScheduleV24_2:";
 function downloadedScheduleKey(sport,team,season){return DOWNLOADED_SCHEDULE_PREFIX+[sport,normalizeTeamName(team),season].join(":");}
-function readDownloadedSchedule(sport,team,season){try{const raw=localStorage.getItem(downloadedScheduleKey(sport,team,season));return raw?JSON.parse(raw):null;}catch{return null;}}
-function saveDownloadedSchedule(sport,team,season,games){localStorage.setItem(downloadedScheduleKey(sport,team,season),JSON.stringify({savedAt:new Date().toISOString(),games}));}
-function clearDownloadedSchedules(){Object.keys(localStorage).filter(k=>k.startsWith(DOWNLOADED_SCHEDULE_PREFIX)).forEach(k=>localStorage.removeItem(k));}
+const scheduleDbPromise=new Promise((resolve,reject)=>{
+  const req=indexedDB.open("stadiumPassportSchedules",1);
+  req.onupgradeneeded=()=>req.result.createObjectStore("schedules");
+  req.onsuccess=()=>resolve(req.result);req.onerror=()=>reject(req.error);
+});
+async function scheduleDbGet(key){try{const db=await scheduleDbPromise;return await new Promise((res,rej)=>{const r=db.transaction("schedules").objectStore("schedules").get(key);r.onsuccess=()=>res(r.result??null);r.onerror=()=>rej(r.error);});}catch(e){console.warn(e);return null;}}
+async function scheduleDbPut(key,value){try{const db=await scheduleDbPromise;await new Promise((res,rej)=>{const tx=db.transaction("schedules","readwrite");tx.objectStore("schedules").put(value,key);tx.oncomplete=res;tx.onerror=()=>rej(tx.error);});}catch(e){console.warn("Could not store schedule",e);}}
+async function scheduleDbClear(prefix){try{const db=await scheduleDbPromise;await new Promise((res,rej)=>{const tx=db.transaction("schedules","readwrite"),st=tx.objectStore("schedules"),r=st.openCursor();r.onsuccess=()=>{const c=r.result;if(!c)return;if(!prefix||String(c.key).startsWith(prefix))c.delete();c.continue();};tx.oncomplete=res;tx.onerror=()=>rej(tx.error);});}catch(e){console.warn(e);}}
+legacyDownloadedSchedules.forEach(([key,raw])=>{try{scheduleDbPut(key,JSON.parse(raw));}catch(e){}});
+async function readDownloadedSchedule(sport,team,season){return await scheduleDbGet(downloadedScheduleKey(sport,team,season));}
+async function saveDownloadedSchedule(sport,team,season,games){await scheduleDbPut(downloadedScheduleKey(sport,team,season),{savedAt:new Date().toISOString(),games});}
+async function clearDownloadedSchedules(){await scheduleDbClear(DOWNLOADED_SCHEDULE_PREFIX);}
 
 async function fetchSeasonGames(stadium,season){
-  const downloaded=readDownloadedSchedule(stadium.sport,stadium.team,season);
+  const downloaded=await readDownloadedSchedule(stadium.sport,stadium.team,season);
   if(downloaded?.games?.length)return downloaded.games;
   const cfg=scoreApiConfig[stadium.sport],token=await resolveScheduleTeam(stadium.sport,stadium.team);
   const selectedYear=Number(season);
@@ -740,17 +776,19 @@ const scoreApiConfig = {
 const scheduleTeamCache = {};
 const SCHEDULE_CACHE_PREFIX = "stadiumPassportScheduleV22_2:";
 function scheduleCacheKey(url){return SCHEDULE_CACHE_PREFIX + btoa(unescape(encodeURIComponent(url))).replace(/=+$/g,"");}
-function readScheduleCache(url,maxAgeMs=1000*60*60*24*14){
-  try{const raw=localStorage.getItem(scheduleCacheKey(url));if(!raw)return null;const cached=JSON.parse(raw);if(!cached?.savedAt||Date.now()-cached.savedAt>maxAgeMs)return null;return cached.data;}catch{return null;}
+async function readScheduleCache(url,maxAgeMs=1000*60*60*24*14){
+  const cached=await scheduleDbGet(scheduleCacheKey(url));if(!cached?.savedAt||Date.now()-cached.savedAt>maxAgeMs)return null;return cached.data;
 }
-function writeScheduleCache(url,data){try{localStorage.setItem(scheduleCacheKey(url),JSON.stringify({savedAt:Date.now(),data}));}catch{}}
+async function readStaleScheduleCache(url){const cached=await scheduleDbGet(scheduleCacheKey(url));return cached?.data??null;}
+function writeScheduleCache(url,data){scheduleDbPut(scheduleCacheKey(url),{savedAt:Date.now(),data});}
+window.clearScheduleResponseCache=()=>scheduleDbClear(SCHEDULE_CACHE_PREFIX);
 async function fetchJsonAttempt(url,timeoutMs=12000){
   const controller=new AbortController();const timer=setTimeout(()=>controller.abort(),timeoutMs);
   try{const response=await fetch(url,{signal:controller.signal,cache:"no-store",headers:{Accept:"application/json"}});if(!response.ok)throw new Error(`HTTP ${response.status}`);return await response.json();}
   finally{clearTimeout(timer);}
 }
 async function fetchScheduleJson(url,{allowStale=true}={}){
-  const cached=readScheduleCache(url);if(cached)return cached;
+  const cached=await readScheduleCache(url);if(cached)return cached;
   const routes=[url,`https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`,`https://corsproxy.io/?url=${encodeURIComponent(url)}`];
   let lastError=null;
   for(const route of routes){
@@ -760,7 +798,7 @@ async function fetchScheduleJson(url,{allowStale=true}={}){
     }
   }
   if(allowStale){
-    try{const raw=localStorage.getItem(scheduleCacheKey(url));if(raw)return JSON.parse(raw).data;}catch{}
+    try{const stale=await readStaleScheduleCache(url);if(stale)return stale;}catch{}
   }
   const offline=!navigator.onLine;
   throw new Error(offline?"You appear to be offline. Reconnect and tap Retry.":"The schedule provider could not be reached. Tap Retry in a moment.");
@@ -839,9 +877,9 @@ async function runScheduleUpdate(){
   const teams=[...new Set(STADIUMS.filter(x=>x.sport===sport).map(x=>x.team))];
   button.disabled=true;let completed=0,failed=0,totalGames=0;progress.textContent=`Starting ${sport} ${season} update for ${teams.length} teams…`;
   const queue=[...teams];
-  async function worker(){while(queue.length){const team=queue.shift();try{const games=await fetchScheduleThroughService(sport,team,season);saveDownloadedSchedule(sport,team,season,games);totalGames+=games.length;}catch(e){console.error(team,e);failed++;}completed++;progress.textContent=`Updated ${completed} of ${teams.length} teams · ${totalGames} home games saved${failed?` · ${failed} failed`:''}`;}}
+  async function worker(){while(queue.length){const team=queue.shift();try{const games=await fetchScheduleThroughService(sport,team,season);await saveDownloadedSchedule(sport,team,season,games);totalGames+=games.length;}catch(e){console.error(team,e);failed++;}completed++;progress.textContent=`Updated ${completed} of ${teams.length} teams · ${totalGames} home games saved${failed?` · ${failed} failed`:''}`;}}
   await Promise.all(Array.from({length:Math.min(5,teams.length)},worker));
-  const stamp=new Date().toLocaleString();localStorage.setItem(`stadiumPassportLastScheduleUpdate:${sport}:${season}`,stamp);
+  const stamp=new Date().toLocaleString();safeSetItem(`stadiumPassportLastScheduleUpdate:${sport}:${season}`,stamp);
   progress.textContent=failed?`Finished with ${failed} team${failed===1?'':'s'} unavailable. ${totalGames} home games were saved. Tap Update again later to retry.`:`Update complete. ${totalGames} home games saved for ${sport} ${season}.`;button.disabled=false;
 }
 function bindScheduleUpdates(){
@@ -849,7 +887,7 @@ function bindScheduleUpdates(){
   const suggested=()=>{const y=now.getFullYear();season.value=(sport.value==="NBA"||sport.value==="CBB")?(now.getMonth()>=6?y:y-1):y;};
   button?.addEventListener('click',()=>{suggested();dialog.showModal();});sport?.addEventListener('change',suggested);
   $("#runScheduleUpdate")?.addEventListener('click',runScheduleUpdate);
-  $("#clearScheduleUpdates")?.addEventListener('click',()=>{if(!confirm('Clear downloaded schedules? Your personal visits will not be affected.'))return;clearDownloadedSchedules();$("#scheduleUpdateProgress").textContent='Downloaded schedules cleared.';});
+  $("#clearScheduleUpdates")?.addEventListener('click',async()=>{if(!confirm('Clear downloaded schedules? Your personal visits will not be affected.'))return;await clearDownloadedSchedules();$("#scheduleUpdateProgress").textContent='Downloaded schedules cleared.';});
 }
 
 function matchupIncludes(event,opponent){
