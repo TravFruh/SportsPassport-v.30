@@ -1,4 +1,4 @@
-const CACHE = 'stadium-passport-v31-video-fix-2026-09-28';
+const CACHE = 'stadium-passport-v32-video-play-2026-09-28';
 const ASSETS = ['./','./index.html','./styles.css','./app.js','./data.js','./college-logos.js','./manifest.webmanifest','./icon.svg','./icon-192.png','./icon-512.png','./apple-touch-icon.png','./mac-logo.png','./liu-logo.png','./summit-league-logo.png','./tmf-header.png','./app-fixes-2026-08.js','./app-photo-gallery-2026-08.js','./sync-config.js','./app-venue-attribution-2026-08.js','./cloud-sync.js'];
 self.addEventListener('install', event => { self.skipWaiting(); event.waitUntil(caches.open(CACHE).then(cache => cache.addAll(ASSETS))); });
 self.addEventListener('activate', event => event.waitUntil(caches.keys().then(keys => Promise.all(keys.filter(key => key !== CACHE).map(key => caches.delete(key)))).then(() => self.clients.claim())));

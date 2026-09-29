@@ -64,7 +64,7 @@ function isVideoMedia(src){return typeof src==='string'&&(src.startsWith('data:v
 function mediaElement(src,alt,classes=''){
   if(typeof src!=='string'||!src)return `<div class="${classes} media-unavailable" role="img" aria-label="${escapeHtml(alt)}">Video unavailable — remove it and add it again from your photo library</div>`;
   return isVideoMedia(src)
-    ? `<video class="${classes}" src="${escapeHtml(src.startsWith('blob:')?src+'#t=0.001':src)}" controls playsinline webkit-playsinline preload="metadata" aria-label="${escapeHtml(alt)}"></video>`
+    ? `<video class="${classes}" src="${escapeHtml(src)}" controls playsinline webkit-playsinline preload="metadata" aria-label="${escapeHtml(alt)}"></video>`
     : `<img class="${classes}" src="${escapeHtml(src)}" alt="${escapeHtml(alt)}">`;
 }
 /* Videos: iPhone Safari often can't play a Blob straight out of IndexedDB, so each stored video is
@@ -1014,3 +1014,31 @@ window.addEventListener('beforeinstallprompt',event=>{event.preventDefault();def
 const installButton=$("#installBtn");if(installButton)installButton.addEventListener('click',async()=>{if(!deferredInstallPrompt)return;deferredInstallPrompt.prompt();await deferredInstallPrompt.userChoice;deferredInstallPrompt=null;installButton.hidden=true;});
 window.addEventListener('appinstalled',()=>{deferredInstallPrompt=null;if(installButton)installButton.hidden=true;});
 if('serviceWorker' in navigator&&location.protocol.startsWith('http'))window.addEventListener('load',()=>navigator.serviceWorker.register('./sw.js').catch(console.error));
+
+/* Video playback helper (v32): a tap on a paused video starts it directly, and if the phone can't
+   play it, a short message appears on the video instead of a silent black box. */
+const APP_VERSION='v32';
+function videoTypeFor(el){const rec=videoObjectUrls.get(el.getAttribute('src'));return rec?guessVideoType(rec):'unknown';}
+function showVideoProblem(el,why){
+  const holder=el.parentElement;if(!holder||holder.querySelector('.video-problem'))return;
+  const note=document.createElement('div');note.className='video-problem';
+  note.textContent=`Can't play this video (${why}; type ${videoTypeFor(el)}).`;
+  holder.insertBefore(note,el.nextSibling);
+}
+const mediaErrorNames={1:'aborted',2:'network error',3:'decode error',4:'format not supported'};
+document.addEventListener('error',e=>{const v=e.target;if(v&&v.tagName==='VIDEO'&&v.closest('#photoGallery,.event-card'))showVideoProblem(v,`error ${v.error?.code||'?'}: ${mediaErrorNames[v.error?.code]||'unknown'}`);},true);
+document.addEventListener('pointerdown',e=>{const v=e.target.closest&&e.target.closest('#photoGallery video,.event-card video');if(v)v.dataset.wasPaused=v.paused?'1':'0';},true);
+document.addEventListener('click',e=>{
+  const v=e.target.closest&&e.target.closest('#photoGallery video,.event-card video');if(!v)return;
+  const wasPaused=v.dataset.wasPaused!=='0';
+  setTimeout(()=>{ // let the built-in controls act first
+    if(!wasPaused||!v.paused)return;
+    if(v.error){showVideoProblem(v,`error ${v.error.code}: ${mediaErrorNames[v.error.code]||'unknown'}`);return;}
+    const p=v.play();
+    if(p&&p.catch)p.catch(err=>{
+      if(typeof v.webkitEnterFullscreen==='function'){try{v.webkitEnterFullscreen();return;}catch(_){}}
+      showVideoProblem(v,err?.name||'playback blocked');
+    });
+  },60);
+});
+document.addEventListener('DOMContentLoaded',()=>{const d=document.querySelector('#backupDialog .dialog-shell');if(d&&!d.querySelector('.app-version')){const p=document.createElement('p');p.className='small app-version';p.textContent=`App version ${APP_VERSION}`;d.appendChild(p);}});
