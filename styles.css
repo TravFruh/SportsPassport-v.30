@@ -733,3 +733,7 @@ button.secondary{color:#fff;border-color:rgba(255,255,255,.5);background:rgba(8,
   object-position: center !important;
   background: #111;
 }
+
+/* Video fix: placeholder for a video that can no longer be loaded */
+.media-unavailable{display:flex;align-items:center;justify-content:center;text-align:center;padding:12px;background:#1f2937;color:#e5e7eb;font-size:13px;line-height:1.35;border-radius:10px;aspect-ratio:1/1;box-sizing:border-box;width:100%;height:100%}
+.gallery-item video.gallery-media,.event-card-media{background:#000}

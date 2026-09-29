@@ -6,7 +6,7 @@
   const $=s=>document.querySelector(s);
   const status=(text,kind='')=>{const el=$('#syncStatus');if(el){el.textContent=text;el.className=kind;}};
   const setUi=()=>{const connected=!!user;$('#syncAuthFields')?.toggleAttribute('hidden',connected);$('#syncConnectedFields')?.toggleAttribute('hidden',!connected);if(!ready)status('Cloud sync is not configured yet. Open SETUP-CLOUD-SYNC.md in the ZIP.','error');else if(user)status(`Connected as ${user.email}.`, 'ok');else status('Not signed in. Your information is still stored safely on this device.');};
-  async function mediaPayload(){if(typeof allPhotos!=='function')return {};return await allPhotos();}
+  async function mediaPayload(){if(typeof allPhotos!=='function')return {};const all=await allPhotos();return typeof window.serializeMediaForExport==='function'?await window.serializeMediaForExport(all):all;}
   function localTime(){return localStorage.getItem('stadiumPassportLocalUpdatedAt')||'';}
   async function localPayload(){return {version:3,updatedAt:localTime()||new Date().toISOString(),state:window.state||state,photos:await mediaPayload()};}
   async function upload(){if(!client||!user)throw new Error('Sign in first.');const payload=await localPayload();const {error}=await client.from('passport_snapshots').upsert({user_id:user.id,payload,device_updated_at:payload.updatedAt},{onConflict:'user_id'});if(error)throw error;localStorage.setItem('stadiumPassportCloudUpdatedAt',payload.updatedAt);status('This device was uploaded to the cloud.','ok');return payload;}

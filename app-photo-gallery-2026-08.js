@@ -105,13 +105,10 @@
 
     // Direct listeners on the gallery prevent the older document-level viewer from
     // intercepting the tap. The first photo is therefore the entry point.
-    document.addEventListener('click', event => {
-      const source = event.target.closest('#detailContent #photoGallery .gallery-media');
-      if (!source) return;
-      event.preventDefault();
-      event.stopPropagation();
-      open(source);
-    }, true);
+    // Tap-to-enlarge is handled by the viewer in app-fixes-2026-08.js, which lives inside the
+    // visit window. This one sat behind the window (invisible) and blocked video taps, so it no
+    // longer opens on its own.
+    void open;
 
     // Use capture-phase listeners so the close button always wins immediately,
     // including on mobile browsers where a dialog/document click can otherwise interfere.

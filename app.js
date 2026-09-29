@@ -62,10 +62,38 @@ function formatDate(date){ return date ? new Date(`${date}T12:00:00`).toLocaleDa
 const videoObjectUrls=new Map();
 function isVideoMedia(src){return typeof src==='string'&&(src.startsWith('data:video/')||src.startsWith('blob:'));}
 function mediaElement(src,alt,classes=''){
+  if(typeof src!=='string'||!src)return `<div class="${classes} media-unavailable" role="img" aria-label="${escapeHtml(alt)}">Video unavailable — remove it and add it again from your photo library</div>`;
   return isVideoMedia(src)
-    ? `<video class="${classes}" src="${escapeHtml(src)}" controls playsinline preload="metadata" aria-label="${escapeHtml(alt)}"></video>`
+    ? `<video class="${classes}" src="${escapeHtml(src.startsWith('blob:')?src+'#t=0.001':src)}" controls playsinline webkit-playsinline preload="metadata" aria-label="${escapeHtml(alt)}"></video>`
     : `<img class="${classes}" src="${escapeHtml(src)}" alt="${escapeHtml(alt)}">`;
 }
+/* Videos: iPhone Safari often can't play a Blob straight out of IndexedDB, so each stored video is
+   copied into a fresh in-memory Blob with an explicit video type before it gets a playable URL. */
+function guessVideoType(record){const t=record?.mime||record?.blob?.type||'';return t&&t.startsWith('video/')?t:'video/mp4';}
+async function playableVideoUrl(record){
+  const buf=await record.blob.arrayBuffer();
+  const blob=new Blob([buf],{type:guessVideoType(record)});
+  const url=URL.createObjectURL(blob);
+  videoObjectUrls.set(url,record);
+  return url;
+}
+/* Backups and cloud copies are JSON, which can't hold a Blob, so videos are converted to data URLs
+   there (getPhotos turns them back into Blobs when they're restored). */
+async function serializeMediaForExport(all){
+  const out={};
+  for(const [key,value] of Object.entries(all||{})){
+    const items=Array.isArray(value)?value:[value];
+    const converted=[];
+    for(const item of items){
+      if(item&&typeof item==='object'&&item.kind==='video'){
+        if(item.blob instanceof Blob){try{converted.push(await readFileAsDataURL(new Blob([await item.blob.arrayBuffer()],{type:guessVideoType(item)})));}catch(e){console.warn('Could not export a video',e);}}
+      }else converted.push(item);
+    }
+    out[key]=converted;
+  }
+  return out;
+}
+window.serializeMediaForExport=serializeMediaForExport;
 function readFileAsDataURL(file){return new Promise((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve(reader.result);reader.onerror=()=>reject(reader.error||new Error('Unable to read file'));reader.readAsDataURL(file);});}
 
 const dbPromise = new Promise((resolve,reject)=>{
@@ -91,10 +119,10 @@ async function getPhotos(id){
       const display=[];
       let migrated=false;
       for(const item of items){
-        if(item&&typeof item==='object'&&item.kind==='video'&&item.blob instanceof Blob){
-          const url=URL.createObjectURL(item.blob);
-          videoObjectUrls.set(url,item);
-          display.push(url);
+        if(item&&typeof item==='object'&&item.kind==='video'){
+          if(item.blob instanceof Blob){
+            try{display.push(await playableVideoUrl(item));}catch(e){console.warn('Could not load a stored video',e);display.push(null);}
+          }else display.push(null);
           continue;
         }
         if(typeof item==='string'&&item.startsWith('data:video/')){
@@ -270,7 +298,7 @@ async function renderOverview(){
   $("#content").innerHTML=`<section class="passport-cover ${cover?'has-cover':''}" ${cover?`style="background-image:linear-gradient(90deg,rgba(0,0,0,.55),rgba(0,0,0,.08)),url('${cover}')"`:''}><div><h2>Welcome Back, Travis!</h2><p>${visits.length} game visit${visits.length===1?'':'s'} · ${venueCount} unique venue${venueCount===1?'':'s'}</p></div><label class="cover-camera" title="Change cover photo">📷<input id="coverInput" type="file" accept="image/*" hidden></label></section>${visits.length?yearHtml:'<div class="empty overview-empty">Your saved visits will appear here, grouped by year.</div>'}${mapSection('All visited venues')}`;
   initVisitedMap(STADIUMS.filter(x=>getVisits(x.id).length));
   $("#coverInput").onchange=async ev=>{const f=ev.target.files[0];if(!f)return;const data=await resizeImage(f,1600,.84);await putPhotos("__cover__",[data]);renderOverview();};
-  $("#content").querySelectorAll(".event-card").forEach(el=>el.onclick=()=>openDetail(el.dataset.id,el.dataset.visitId));
+  $("#content").querySelectorAll(".event-card").forEach(el=>el.onclick=e=>{if(e.target.closest('video'))return;openDetail(el.dataset.id,el.dataset.visitId);});
   hydrateOverviewLogos();
 }
 function initials(text){return String(text||'').split(/\s+/).filter(Boolean).slice(0,3).map(w=>w[0]).join('').toUpperCase();}
@@ -279,7 +307,7 @@ async function eventCard(x,e){
   const gameSport=inferGameSport(e,x.sport);
   let photos=await getPhotos(visitPhotoKey(x.id,e.id));
   if(!photos.length&&e.id==='legacy')photos=await getPhotos(x.id);
-  const thumb=photos[0]||"",d=shortDate(e.date);
+  const thumb=photos.find(Boolean)||"",d=shortDate(e.date);
   const seat=[e.section&&`Sec ${e.section}`,e.row&&`Row ${e.row}`,e.seat&&`Seat ${e.seat}`].filter(Boolean).join(' · ');
   const homeTeam=e.teamName||x.team;
   const awayTeam=e.opponent||'Opponent';
@@ -975,7 +1003,7 @@ function resizeImage(file,max,quality){return new Promise((resolve,reject)=>{con
 $("#search").oninput=renderContent; $("#statusFilter").onchange=renderContent;
 $("#backupBtn").onclick=()=>$("#backupDialog").showModal();
 const syncButton=$("#syncBtn");if(syncButton)syncButton.onclick=()=>$("#syncDialog").showModal();
-$("#exportBtn").onclick=async()=>{const payload={version:3,exported:new Date().toISOString(),state,teamEdits,photos:await allPhotos()};const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([JSON.stringify(payload)],{type:'application/json'}));a.download='stadium-passport-backup.json';a.click();URL.revokeObjectURL(a.href);};
+$("#exportBtn").onclick=async()=>{const payload={version:3,exported:new Date().toISOString(),state,teamEdits,photos:await serializeMediaForExport(await allPhotos())};const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([JSON.stringify(payload)],{type:'application/json'}));a.download='stadium-passport-backup.json';a.click();URL.revokeObjectURL(a.href);};
 $("#importFile").onchange=async ev=>{const file=ev.target.files[0];if(!file)return;try{const data=JSON.parse(await file.text());Object.keys(state).forEach(k=>delete state[k]);Object.assign(state,data.state||{});Object.keys(teamEdits).forEach(k=>delete teamEdits[k]);Object.assign(teamEdits,data.teamEdits||{});saveTeamEdits();saveState();for(const [id,p] of Object.entries(data.photos||{}))await putPhotos(id,Array.isArray(p)?p:[p]);alert('Backup imported.');$("#backupDialog").close();render();}catch(e){alert('That backup file could not be imported.');}};
 $("#resetBtn").onclick=async()=>{if(!confirm('Delete all visits, notes, and photos?'))return;localStorage.removeItem('stadiumPassportState');Object.keys(state).forEach(k=>delete state[k]);const db=await dbPromise;db.close();indexedDB.deleteDatabase('stadiumPassportPhotos');location.reload();};
 bindMobileNav();
