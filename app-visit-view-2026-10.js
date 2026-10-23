@@ -48,7 +48,7 @@
   }
   function knownTeamColor(stadiumId,sport,name){
     const page=readJSON(PAGE_COLOR_KEY)[stadiumId];if(page)return {color:page,custom:true};
-    const pro=PRO_COLORS[sport]?.[norm(name)];if(pro)return {color:pro};
+    const pro=(PRO_COLORS[sport]||{})[norm(name)];if(pro)return {color:pro};
     const cached=readJSON(COLOR_CACHE_KEY)[`${sport}:${norm(name)}`];if(cached)return {color:cached};
     return {color:'',pending:true};
   }
@@ -78,10 +78,11 @@
     const dialog=document.getElementById('detailDialog');dialog.classList.add('visit-view-mode');
     const sport=typeof inferGameSport==='function'?inferGameSport(visit,x.sport):x.sport;
     const myTeam=visit.teamName||x.team,opp=visit.opponent||'Opponent';
-    const colorTeam=visit.neutralSite?myTeam:x.team;
+    const colorTeam=(visit.neutralSite||!trackedSports.includes(x.sport))?myTeam:x.team;
     const known=knownTeamColor(x.id,sport,colorTeam);
     const outcome=(typeof visitOutcome==='function'?visitOutcome(visit):visit.outcome)||'';
     const hasScore=visit.teamScore!==''&&visit.teamScore!=null&&visit.opponentScore!==''&&visit.opponentScore!=null;
+    const tN=Number(visit.teamScore),oN=Number(visit.opponentScore),homeWon=hasScore&&tN>=oN,awayWon=hasScore&&oN>=tN;
     const media=(photos||[]).filter(Boolean);
     const images=media.filter(p=>!(typeof isVideoMedia==='function'&&isVideoMedia(p)));
     const seats=[['SEC',visit.section],['ROW',visit.row],['SEAT',visit.seat]].filter(([,v])=>String(v||'').trim());
@@ -114,9 +115,9 @@
         <section class="vv-card vv-score">
           <div class="vv-score-top"><span>${esc(label.toUpperCase())}</span>${outcome?`<b class="vv-outcome ${esc(outcome.toLowerCase())}">${esc(outcome)}</b>`:''}</div>
           <div class="vv-matchup">
-            <div class="vv-team">${teamBadge(sport,myTeam,known.color||FALLBACK)}<span>${esc(shortName(myTeam,visit.teamMascot))}</span></div>
-            <div class="vv-final">${hasScore?`<strong>${esc(visit.teamScore)}</strong><i>–</i><strong class="dim">${esc(visit.opponentScore)}</strong>`:'<i>vs.</i>'}</div>
-            <div class="vv-team">${teamBadge(sport,opp,'#4b5563')}<span>${esc(shortName(opp,visit.opponentMascot))}</span></div>
+            <div class="vv-team">${teamBadge(sport,opp,'#4b5563')}<span>${esc(shortName(opp,visit.opponentMascot))}</span><small>${visit.neutralSite?'':'AWAY'}</small></div>
+            <div class="vv-final">${hasScore?`<strong class="${awayWon?'':'dim'}">${esc(visit.opponentScore)}</strong><i>${visit.neutralSite?'–':'@'}</i><strong class="${homeWon?'':'dim'}">${esc(visit.teamScore)}</strong>`:`<i>${visit.neutralSite?'vs.':'@'}</i>`}</div>
+            <div class="vv-team home">${teamBadge(sport,myTeam,known.color||FALLBACK)}<span>${esc(shortName(myTeam,visit.teamMascot))}</span><small>${visit.neutralSite?'':'HOME'}</small></div>
           </div>
           <div class="vv-place"><strong>${esc(x.venue)}</strong><span>${esc([niceDate(visit.date),place].filter(Boolean).join(' · '))}</span>${visit.neutralSite?'<em>Neutral site</em>':''}</div>
           ${seats.length?`<div class="vv-seats n${seats.length}">${seats.map(([k,v])=>`<div><span>${k}</span><strong>${esc(v)}</strong></div>`).join('')}</div>`:''}

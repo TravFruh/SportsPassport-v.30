@@ -828,3 +828,5 @@ button.secondary{color:#fff;border-color:rgba(255,255,255,.5);background:rgba(8,
 .vv .gallery-item{padding:0!important;border:0!important;background:transparent!important;box-shadow:none!important;margin:0!important}
 .vv-cover-slide .gallery-media,.vv-tile .gallery-media,.vv-ticket .gallery-media{width:100%!important;height:100%!important;max-height:none!important;min-height:0!important;object-fit:cover!important;display:block}
 .vv-tile.gallery-item{background:#111827!important}
+.vv-team small{font-size:10px;font-weight:700;letter-spacing:.12em;color:#6b7280;min-height:12px}
+.vv-final i{font-size:18px}
