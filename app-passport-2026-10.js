@@ -168,5 +168,6 @@
     if(!root)return;document.body.classList.add('passport-book-mode');
     if(view.league&&LEAGUES[view.league])renderLeague(root,view.league);else renderHome(root);
   };
+  window.openPassportLeague=function(sport){view.league=LEAGUES[sport]?sport:null;activeSport='PASSPORT';render();window.scrollTo({top:0});};
   window.leavePassportBook=function(){document.body.classList.remove('passport-book-mode');};
 })();
