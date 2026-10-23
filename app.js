@@ -617,7 +617,7 @@ function renderEdits(){
   $("#manualGameForm").onsubmit=e=>{e.preventDefault();const sourceId=$("#manualTeam").value,source=STADIUMS.find(r=>r.id===sourceId);if(!source)return;const targetId=neutral.checked?($("#manualVenue").value||sourceId):sourceId;const visit={...emptyVisit(),id:newVisitId(),date:$("#manualDate").value,season:String($("#manualSeason").value),gameSport:$("#manualSport").value,opponent:$("#manualOpponent").value.trim(),teamName:source.team,eventName:$("#manualEventName").value.trim(),eventType:$("#manualEventType").value,neutralSite:neutral.checked,venueId:targetId};const list=getVisits(targetId);list.push(visit);state[targetId]={visits:list};saveState();$("#manualGameStatus").textContent=`Added ${visit.opponent} at ${source.team} on ${formatDate(visit.date)}.`;e.target.reset();$("#manualSeason").value='2027';venueWrap.hidden=true;};
 }
 
-async function render(){if($("#controls"))$("#controls").hidden=activeSport==="OVERVIEW"||activeSport==="SCRATCH MAP"||activeSport==="PASSPORT"||activeSport==="PERSONAL RECORDS"||activeSport==="ACHIEVEMENTS"||activeSport==="EDITS";if(currentMap){currentMap.remove();currentMap=null;}document.body.classList.toggle("overview-mode",activeSport==="OVERVIEW");if(trackedSports.includes(activeSport))lastLeagueSport=activeSport;renderTabs();renderMobileNav();renderSummary();if(activeSport==="OVERVIEW")await renderOverview();else if(activeSport==="CHECKLIST")renderChecklist();else if(activeSport==="SCRATCH MAP")await renderScratchMap();else if(activeSport==="PASSPORT")await renderPassport();else if(activeSport==="PERSONAL RECORDS")await renderPersonalRecords();else if(activeSport==="ACHIEVEMENTS")await renderAchievements();else if(activeSport==="EDITS")renderEdits();else renderContent();}
+async function render(){if($("#controls"))$("#controls").hidden=activeSport==="OVERVIEW"||activeSport==="SCRATCH MAP"||activeSport==="PASSPORT"||activeSport==="PERSONAL RECORDS"||activeSport==="ACHIEVEMENTS"||activeSport==="EDITS";if(currentMap){currentMap.remove();currentMap=null;}document.body.classList.toggle("overview-mode",activeSport==="OVERVIEW");if(trackedSports.includes(activeSport))lastLeagueSport=activeSport;if(activeSport!=="PASSPORT")window.leavePassportBook?.();renderTabs();renderMobileNav();renderSummary();if(activeSport==="OVERVIEW")await renderOverview();else if(activeSport==="CHECKLIST")renderChecklist();else if(activeSport==="SCRATCH MAP")await renderScratchMap();else if(activeSport==="PASSPORT"){if(window.renderPassportBook)window.renderPassportBook($("#content"));else await renderPassport();}else if(activeSport==="PERSONAL RECORDS")await renderPersonalRecords();else if(activeSport==="ACHIEVEMENTS")await renderAchievements();else if(activeSport==="EDITS")renderEdits();else renderContent();}
 
 
 
@@ -1077,7 +1077,7 @@ if('serviceWorker' in navigator&&location.protocol.startsWith('http'))window.add
 
 /* Video playback helper (v32): a tap on a paused video starts it directly, and if the phone can't
    play it, a short message appears on the video instead of a silent black box. */
-const APP_VERSION='v37';
+const APP_VERSION='v38';
 function videoTypeFor(el){const rec=videoObjectUrls.get(el.getAttribute('src'));return rec?guessVideoType(rec):'unknown';}
 function showVideoProblem(el,why){
   const holder=el.parentElement;if(!holder||holder.querySelector('.video-problem'))return;
