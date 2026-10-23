@@ -73,6 +73,7 @@
   function shortName(full,mascot){return mascot||full;}
   function niceDate(d){if(!d)return '';const x=new Date(`${d}T12:00:00`);return x.toLocaleDateString(undefined,{weekday:'short',month:'short',day:'numeric',year:'numeric'});}
 
+  window.teamColorFor=(sport,name)=>((PRO_COLORS[sport]||{})[norm(name)])||readJSON(COLOR_CACHE_KEY)[`${sport}:${norm(name)}`]||'';
   window.renderVisitView=async function(ctx){
     const {x,visit,visits,photos,ticketScans,onEdit,onSelect,onAdd}=ctx;
     const dialog=document.getElementById('detailDialog');dialog.classList.add('visit-view-mode');

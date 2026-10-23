@@ -830,3 +830,25 @@ button.secondary{color:#fff;border-color:rgba(255,255,255,.5);background:rgba(8,
 .vv-tile.gallery-item{background:#111827!important}
 .vv-team small{font-size:10px;font-weight:700;letter-spacing:.12em;color:#6b7280;min-height:12px}
 .vv-final i{font-size:18px}
+
+/* ===== v36: Overview logo slideshow ===== */
+.passport-cover.logo-show{position:relative;overflow:hidden;align-items:center;gap:16px;background:linear-gradient(135deg,var(--ls-tint,rgba(174,183,196,.35)),#f7f8fa 70%);color:#20242b;transition:background .6s}
+.logo-show .ls-text{position:relative;z-index:1;min-width:0;flex:1 1 auto}
+.logo-show .ls-caption{display:block;margin-top:10px;font-size:13px;font-weight:700;letter-spacing:.04em;color:#4b5563;min-height:16px}
+.logo-show .ls-stage{position:relative;flex:0 0 auto;width:min(42%,190px);aspect-ratio:1/1}
+.logo-show .ls-img{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;opacity:0;transform:scale(.94);transition:opacity .45s ease,transform .45s ease;filter:drop-shadow(0 6px 14px rgba(17,24,39,.18))}
+.logo-show .ls-img.on{opacity:1;transform:none}
+@media(max-width:560px){.passport-cover.logo-show{padding:20px;min-height:170px}.logo-show .ls-stage{width:118px}.logo-show .ls-caption{font-size:12px}}
+@media(prefers-reduced-motion:reduce){.logo-show .ls-img{transition:none;transform:none}}
+
+/* ===== v36: header buttons in a neat row under the title ===== */
+.topbar{flex-direction:column;align-items:flex-start}
+.topbar .header-actions{position:static!important;width:100%;max-width:460px;display:flex;flex-wrap:nowrap;justify-content:flex-start;gap:8px;margin-top:12px}
+.topbar .header-actions button{flex:1 1 0;min-width:0;white-space:nowrap;min-height:42px;padding:8px 10px;font-size:14px}
+.topbar .header-actions [hidden]{display:none!important}
+@media(max-width:600px){
+  .topbar{display:grid;grid-template-columns:1fr;place-items:center}
+  .topbar .header-actions{max-width:360px;justify-content:center;margin:12px auto 0}
+  .topbar .header-actions button{flex:1 1 auto;font-size:13px;font-weight:700;padding:8px 10px;min-height:40px;background:rgba(255,255,255,.92)!important;color:#111827!important;border:1px solid rgba(255,255,255,.6)!important}
+}
+.overview-mode .topbar .header-actions{display:none!important}

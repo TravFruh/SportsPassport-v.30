@@ -302,9 +302,10 @@ async function renderOverview(){
   const years=Object.keys(grouped).sort((a,b)=>b.localeCompare(a));
   const yearHtml=(await Promise.all(years.map(async year=>`<section class="event-year"><div class="year-heading"><h2>${escapeHtml(year)}</h2><span>${grouped[year].length} event${grouped[year].length===1?'':'s'}</span></div><div class="event-stack">${(await Promise.all(grouped[year].map(item=>eventCard(item.stadium,item.visit)))).join('')}</div></section>`))).join('');
   const venueCount=new Set(visits.map(v=>v.stadium.id)).size;
-  $("#content").innerHTML=`<section class="passport-cover ${cover?'has-cover':''}" ${cover?`style="background-image:linear-gradient(90deg,rgba(0,0,0,.55),rgba(0,0,0,.08)),url('${cover}')"`:''}><div><h2>Welcome Back, Travis!</h2><p>${visits.length} game visit${visits.length===1?'':'s'} · ${venueCount} unique venue${venueCount===1?'':'s'}</p></div><label class="cover-camera" title="Change cover photo">📷<input id="coverInput" type="file" accept="image/*" hidden></label></section>${visits.length?yearHtml:'<div class="empty overview-empty">Your saved visits will appear here, grouped by year.</div>'}${mapSection('All visited venues')}`;
+  $("#content").innerHTML=`<section class="passport-cover logo-show" id="logoShow"><div class="ls-text"><h2>Welcome Back, Travis!</h2><p>${visits.length} game visit${visits.length===1?'':'s'} · ${venueCount} unique venue${venueCount===1?'':'s'}</p><span class="ls-caption"></span></div><div class="ls-stage" aria-hidden="true"><img class="ls-img" alt=""><img class="ls-img" alt=""></div></section>${visits.length?yearHtml:'<div class="empty overview-empty">Your saved visits will appear here, grouped by year.</div>'}${mapSection('All visited venues')}`;
   initVisitedMap(STADIUMS.filter(x=>getVisits(x.id).length));
-  $("#coverInput").onchange=async ev=>{const f=ev.target.files[0];if(!f)return;const data=await resizeImage(f,1600,.84);await putPhotos("__cover__",[data]);renderOverview();};
+  window.startLogoShow?.($("#logoShow"));
+  if($("#coverInput"))$("#coverInput").onchange=async ev=>{const f=ev.target.files[0];if(!f)return;const data=await resizeImage(f,1600,.84);await putPhotos("__cover__",[data]);renderOverview();};
   $("#content").querySelectorAll(".event-card").forEach(el=>el.onclick=e=>{if(e.target.closest('video'))return;openDetail(el.dataset.id,el.dataset.visitId);});
   hydrateOverviewLogos();
 }
@@ -1040,7 +1041,7 @@ if('serviceWorker' in navigator&&location.protocol.startsWith('http'))window.add
 
 /* Video playback helper (v32): a tap on a paused video starts it directly, and if the phone can't
    play it, a short message appears on the video instead of a silent black box. */
-const APP_VERSION='v35';
+const APP_VERSION='v36';
 function videoTypeFor(el){const rec=videoObjectUrls.get(el.getAttribute('src'));return rec?guessVideoType(rec):'unknown';}
 function showVideoProblem(el,why){
   const holder=el.parentElement;if(!holder||holder.querySelector('.video-problem'))return;
