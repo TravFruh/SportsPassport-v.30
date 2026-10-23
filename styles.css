@@ -852,3 +852,13 @@ button.secondary{color:#fff;border-color:rgba(255,255,255,.5);background:rgba(8,
   .topbar .header-actions button{flex:1 1 auto;font-size:13px;font-weight:700;padding:8px 10px;min-height:40px;background:rgba(255,255,255,.92)!important;color:#111827!important;border:1px solid rgba(255,255,255,.6)!important}
 }
 .overview-mode .topbar .header-actions{display:none!important}
+
+/* ===== v37: backup reminder ===== */
+.backup-reminder{max-width:920px;margin:-12px auto 24px;background:#fffbeb;border:1px solid #fcd34d;border-radius:16px;padding:14px 16px;display:flex;gap:12px;align-items:center;justify-content:space-between;flex-wrap:wrap;color:#1f2937}
+.backup-reminder>div:first-child{display:flex;flex-direction:column;gap:4px;flex:1 1 240px;min-width:0}
+.backup-reminder strong{font-size:16px;color:#92400e}
+.backup-reminder span{font-size:14px;line-height:1.4;color:#374151}
+.backup-reminder-actions{display:flex;gap:8px;flex-wrap:wrap}
+.backup-reminder-actions button{min-height:44px;padding:0 16px;border-radius:12px;font-weight:700}
+.backup-reminder-actions #backupNow{background:#b45309;color:#fff;border:0}
+@media(max-width:560px){.backup-reminder{max-width:390px;margin:-14px auto 20px}.backup-reminder-actions{width:100%}.backup-reminder-actions button{flex:1 1 0}}

@@ -64,6 +64,37 @@ function newVisitId(){return `v${Date.now()}${Math.random().toString(36).slice(2
 function formatDate(date){ return date ? new Date(`${date}T12:00:00`).toLocaleDateString(undefined,{year:'numeric',month:'long',day:'numeric'}) : "Date not entered"; }
 const videoObjectUrls=new Map();
 function isVideoMedia(src){return typeof src==='string'&&(src.startsWith('data:video/')||src.startsWith('blob:'));}
+/* ===== Data protection helpers (v37) ===== */
+const BACKUP_KEY='stadiumPassportLastBackup',BACKUP_SNOOZE_KEY='stadiumPassportBackupSnooze';
+function readPageColors(){try{return JSON.parse(localStorage.getItem('stadiumPassportPageColorsV1')||'{}')||{};}catch{return {};}}
+function totalVisitCount(){return Object.values(state).reduce((n,e)=>n+(Array.isArray(e?.visits)?e.visits.length:0),0);}
+function recordBackup(){safeSetItem(BACKUP_KEY,JSON.stringify({at:new Date().toISOString(),visits:totalVisitCount()}));localStorage.removeItem(BACKUP_SNOOZE_KEY);if(activeSport==='OVERVIEW')document.getElementById('backupReminder')?.remove();}
+function mergeBackupState(incoming){
+  let added=0,updated=0;
+  for(const [id,entry] of Object.entries(incoming||{})){
+    const inVisits=Array.isArray(entry?.visits)?entry.visits:[];
+    if(!inVisits.length){if(!state[id])state[id]=entry;continue;}
+    const current=Array.isArray(state[id]?.visits)?state[id].visits.slice():[];
+    for(const v of inVisits){if(current.some(c=>c.id===v.id)){updated++;}else{current.push(v);added++;}}
+    state[id]={...entry,...(state[id]||{}),visits:current};
+  }
+  return {added,updated};
+}
+function backupReminderHtml(){
+  const count=totalVisitCount();if(!count)return '';
+  let last=null;try{last=JSON.parse(localStorage.getItem(BACKUP_KEY)||'null');}catch{}
+  const snooze=Number(localStorage.getItem(BACKUP_SNOOZE_KEY)||0);if(snooze&&Date.now()<snooze)return '';
+  const days=last?.at?Math.floor((Date.now()-new Date(last.at).getTime())/86400000):null;
+  const newSince=last?Math.max(0,count-(last.visits||0)):count;
+  if(last&&days<30&&newSince<5)return '';
+  const why=!last?'No backup has been saved from this version of the app yet.':days>=30?`Your last backup was ${days} days ago.`:`You've added ${newSince} visits since your last backup.`;
+  return `<section class="backup-reminder" id="backupReminder"><div><strong>Back up your passport</strong><span>${why} Your visits, photos, and videos live only on this phone.</span></div><div class="backup-reminder-actions"><button type="button" id="backupNow">Back up now</button><button type="button" class="secondary" id="backupLater">Remind me later</button></div></section>`;
+}
+function wireBackupReminder(){
+  const now=document.getElementById('backupNow'),later=document.getElementById('backupLater');
+  if(now)now.onclick=()=>{$("#exportBtn").click();};
+  if(later)later.onclick=()=>{safeSetItem(BACKUP_SNOOZE_KEY,String(Date.now()+7*86400000));document.getElementById('backupReminder')?.remove();};
+}
 function mediaElement(src,alt,classes=''){
   if(typeof src!=='string'||!src)return `<div class="${classes} media-unavailable" role="img" aria-label="${escapeHtml(alt)}">Video unavailable — remove it and add it again from your photo library</div>`;
   return isVideoMedia(src)
@@ -302,9 +333,10 @@ async function renderOverview(){
   const years=Object.keys(grouped).sort((a,b)=>b.localeCompare(a));
   const yearHtml=(await Promise.all(years.map(async year=>`<section class="event-year"><div class="year-heading"><h2>${escapeHtml(year)}</h2><span>${grouped[year].length} event${grouped[year].length===1?'':'s'}</span></div><div class="event-stack">${(await Promise.all(grouped[year].map(item=>eventCard(item.stadium,item.visit)))).join('')}</div></section>`))).join('');
   const venueCount=new Set(visits.map(v=>v.stadium.id)).size;
-  $("#content").innerHTML=`<section class="passport-cover logo-show" id="logoShow"><div class="ls-text"><h2>Welcome Back, Travis!</h2><p>${visits.length} game visit${visits.length===1?'':'s'} · ${venueCount} unique venue${venueCount===1?'':'s'}</p><span class="ls-caption"></span></div><div class="ls-stage" aria-hidden="true"><img class="ls-img" alt=""><img class="ls-img" alt=""></div></section>${visits.length?yearHtml:'<div class="empty overview-empty">Your saved visits will appear here, grouped by year.</div>'}${mapSection('All visited venues')}`;
+  $("#content").innerHTML=`<section class="passport-cover logo-show" id="logoShow"><div class="ls-text"><h2>Welcome Back, Travis!</h2><p>${visits.length} game visit${visits.length===1?'':'s'} · ${venueCount} unique venue${venueCount===1?'':'s'}</p><span class="ls-caption"></span></div><div class="ls-stage" aria-hidden="true"><img class="ls-img" alt=""><img class="ls-img" alt=""></div></section>${backupReminderHtml()}${visits.length?yearHtml:'<div class="empty overview-empty">Your saved visits will appear here, grouped by year.</div>'}${mapSection('All visited venues')}`;
   initVisitedMap(STADIUMS.filter(x=>getVisits(x.id).length));
   window.startLogoShow?.($("#logoShow"));
+  wireBackupReminder();
   if($("#coverInput"))$("#coverInput").onchange=async ev=>{const f=ev.target.files[0];if(!f)return;const data=await resizeImage(f,1600,.84);await putPhotos("__cover__",[data]);renderOverview();};
   $("#content").querySelectorAll(".event-card").forEach(el=>el.onclick=e=>{if(e.target.closest('video'))return;openDetail(el.dataset.id,el.dataset.visitId);});
   hydrateOverviewLogos();
@@ -874,24 +906,22 @@ async function resolveScheduleTeam(sport,teamName){
   const token=hit.t.id||hit.t.abbreviation||hit.t.slug;scheduleTeamCache[key]=token;return token;
 }
 async function fetchScheduleThroughService(sport,team,season){
+  // Fetches straight from ESPN (the app is hosted on GitHub Pages, so there is no server function).
+  // Tries a fresh copy first so "Update Schedules" really updates, then falls back to the saved copy.
   const token=await resolveScheduleTeam(sport,team);
-  const params=new URLSearchParams({sport,team:token,season:String(season)});
-  const serviceUrl=`/.netlify/functions/schedule?${params}`;
-  try{
-    const response=await fetch(serviceUrl,{cache:"no-store",headers:{Accept:"application/json"}});
-    if(!response.ok)throw new Error(`Update service returned ${response.status}`);
-    const data=await response.json();
-    if(!Array.isArray(data.games))throw new Error("Update service returned invalid data");
-    return data.games;
-  }catch(serviceError){
-    const cfg=scoreApiConfig[sport];
-    const apiSeasons=sport==="CBB"?[Number(season)+1,Number(season)]:[Number(season)];
-    const payloads=await Promise.all(apiSeasons.map(async apiSeason=>{
-      const url=`https://site.api.espn.com/apis/site/v2/sports/${cfg.category}/${cfg.league}/teams/${encodeURIComponent(token)}/schedule?season=${apiSeason}`;
+  const cfg=scoreApiConfig[sport];
+  const apiSeasons=sport==="CBB"?[Number(season)+1,Number(season)]:[Number(season)];
+  const payloads=await Promise.all(apiSeasons.map(async apiSeason=>{
+    const url=`https://site.api.espn.com/apis/site/v2/sports/${cfg.category}/${cfg.league}/teams/${encodeURIComponent(token)}/schedule?season=${apiSeason}`;
+    try{
+      const r=await fetch(url,{cache:"no-store",headers:{Accept:"application/json"}});
+      if(!r.ok)throw new Error(`ESPN returned ${r.status}`);
+      const data=await r.json();writeScheduleCache(url,data);return data;
+    }catch{
       try{return await fetchScheduleJson(url);}catch{return {events:[]};}
-    }));
-    return normalizeScheduleEvents(payloads.flatMap(d=>d.events||[]),sport,team,season);
-  }
+    }
+  }));
+  return normalizeScheduleEvents(payloads.flatMap(d=>d.events||[]),sport,team,season);
 }
 function normalizeScheduleEvents(events,sport,teamName,season){
   const unique=new Map();events.forEach(e=>unique.set(e.id||`${e.date}-${e.name}`,e));
@@ -1027,8 +1057,14 @@ function resizeImage(file,max,quality){return new Promise((resolve,reject)=>{con
 $("#search").oninput=renderContent; $("#statusFilter").onchange=renderContent;
 $("#backupBtn").onclick=()=>$("#backupDialog").showModal();
 const syncButton=$("#syncBtn");if(syncButton)syncButton.onclick=()=>$("#syncDialog").showModal();
-$("#exportBtn").onclick=async()=>{const payload={version:3,exported:new Date().toISOString(),state,teamEdits,photos:await serializeMediaForExport(await allPhotos())};const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([JSON.stringify(payload)],{type:'application/json'}));a.download='stadium-passport-backup.json';a.click();URL.revokeObjectURL(a.href);};
-$("#importFile").onchange=async ev=>{const file=ev.target.files[0];if(!file)return;try{const data=JSON.parse(await file.text());Object.keys(state).forEach(k=>delete state[k]);Object.assign(state,data.state||{});Object.keys(teamEdits).forEach(k=>delete teamEdits[k]);Object.assign(teamEdits,data.teamEdits||{});saveTeamEdits();saveState();for(const [id,p] of Object.entries(data.photos||{}))await putPhotos(id,Array.isArray(p)?p:[p]);alert('Backup imported.');$("#backupDialog").close();render();}catch(e){alert('That backup file could not be imported.');}};
+$("#exportBtn").onclick=async()=>{const btn=$("#exportBtn"),label=btn.textContent;btn.disabled=true;btn.textContent='Preparing backup…';try{const payload={version:4,exported:new Date().toISOString(),state,teamEdits,pageColors:readPageColors(),photos:await serializeMediaForExport(await allPhotos())};const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([JSON.stringify(payload)],{type:'application/json'}));a.download=`stadium-passport-backup-${new Date().toISOString().slice(0,10)}.json`;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),60000);recordBackup();}catch(err){console.error(err);alert('The backup could not be created. Please try again.');}finally{btn.disabled=false;btn.textContent=label;}};
+$("#importFile").onchange=async ev=>{const file=ev.target.files[0];if(!file)return;try{const data=JSON.parse(await file.text());if(!data||typeof data!=='object'||!data.state)throw new Error('Not a Stadium Passport backup');
+  if(!confirm('Add the visits from this backup to this device?\n\nNothing already on this device will be deleted or changed. Visits that are already here are kept as they are.')){ev.target.value='';return;}
+  safeSetItem('stadiumPassportPreImportSnapshot',JSON.stringify({at:new Date().toISOString(),state,teamEdits}));
+  const result=mergeBackupState(data.state);for(const [k,v] of Object.entries(data.teamEdits||{}))if(!(k in teamEdits))teamEdits[k]=v;saveTeamEdits();saveState();
+  if(data.pageColors&&typeof data.pageColors==='object'){const pc={...data.pageColors,...readPageColors()};safeSetItem('stadiumPassportPageColorsV1',JSON.stringify(pc));}
+  for(const [id,p] of Object.entries(data.photos||{})){const incoming=Array.isArray(p)?p:[p];if(!incoming.length)continue;const existing=(await getPhotos(id)).filter(Boolean);if(existing.length)continue;await putPhotos(id,incoming);}
+  alert(`Backup imported: ${result.added} visit${result.added===1?'':'s'} added${result.updated?`, ${result.updated} already on this device (kept as is)`:''}. Nothing on this device was removed.`);$("#backupDialog").close();render();}catch(e){console.error(e);alert('That backup file could not be imported.');}finally{ev.target.value='';}};
 $("#resetBtn").onclick=async()=>{if(!confirm('Delete all visits, notes, and photos?'))return;localStorage.removeItem('stadiumPassportState');Object.keys(state).forEach(k=>delete state[k]);const db=await dbPromise;db.close();indexedDB.deleteDatabase('stadiumPassportPhotos');location.reload();};
 bindMobileNav();
 bindAddVisitDialog();
@@ -1041,7 +1077,7 @@ if('serviceWorker' in navigator&&location.protocol.startsWith('http'))window.add
 
 /* Video playback helper (v32): a tap on a paused video starts it directly, and if the phone can't
    play it, a short message appears on the video instead of a silent black box. */
-const APP_VERSION='v36';
+const APP_VERSION='v37';
 function videoTypeFor(el){const rec=videoObjectUrls.get(el.getAttribute('src'));return rec?guessVideoType(rec):'unknown';}
 function showVideoProblem(el,why){
   const holder=el.parentElement;if(!holder||holder.querySelector('.video-problem'))return;
