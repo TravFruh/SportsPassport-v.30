@@ -9,6 +9,10 @@
   const e=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   const MON=['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'];
   const vis=x=>(typeof getVisits==='function'?getVisits(x.id):[]).filter(Boolean);
+  const counted=x=>typeof isCountedVenue==='function'?isCountedVenue(x):true;
+  const statusOf=x=>typeof venueStatus==='function'?venueStatus(x):'current';
+  const yearOf=x=>typeof venueYear==='function'?venueYear(x):'';
+  const venuesOf=x=>typeof teamVenues==='function'?teamVenues(x):[x];
   const visited=x=>vis(x).length>0;
   const norm=s=>typeof normalizeTeamName==='function'?normalizeTeamName(s):String(s||'').toLowerCase();
 
@@ -28,7 +32,7 @@
     return `<span class="lv-logo ${isOn?'on':'off'}" style="--s:${size}px;--ring:${teamColor(x)}">${src?`<img src="${e(src)}" alt="" loading="lazy" onerror="this.remove()">`:''}<b>${e(initials(x.team))}</b></span>`;
   }
   function groupsFor(sport){
-    const rows=STADIUMS.filter(x=>x.sport===sport);
+    const rows=STADIUMS.filter(x=>x.sport===sport&&counted(x));
     if(sport==='NFL'||sport==='MLB'){
       const confs=[...new Set(rows.map(x=>x.conference))];
       return confs.map(c=>({name:sport==='MLB'?c:c,divs:['East','North','South','Central','West'].map(d=>({key:`${c}|${d}`,conf:c,name:d,list:rows.filter(x=>x.conference===c&&x.division===d)})).filter(g=>g.list.length)}));
@@ -52,7 +56,7 @@
 
   /* ---------- main league view ---------- */
   function renderMain(root,sport){
-    const rows=STADIUMS.filter(x=>x.sport===sport),done=rows.filter(visited).length,L=LEAGUE[sport];
+    const rows=STADIUMS.filter(x=>x.sport===sport&&counted(x)),done=rows.filter(visited).length,L=LEAGUE[sport];
     const last=rows.flatMap(x=>vis(x).map(v=>({x,v}))).sort((a,b)=>(b.v.date||'').localeCompare(a.v.date||''))[0];
     const C=2*Math.PI*42,pct=rows.length?done/rows.length:0;
     const q=norm(view.q);
@@ -123,31 +127,79 @@
   function closeSheet(){document.getElementById('lvSheet')?.remove();document.documentElement.classList.remove('lv-sheet-open');}
   function openSheet(id,root){
     closeSheet();const x=STADIUMS.find(r=>r.id===id);if(!x)return;
-    const vs=vis(x).slice().sort((a,b)=>(b.date||'').localeCompare(a.date||''));const n=vs.length;
+    const allV=venuesOf(x),cur=allV.find(v=>statusOf(v)==='current')||x;
+    const order={current:0,coming:1,former:2};const venues=allV.slice().sort((a,b)=>order[statusOf(a)]-order[statusOf(b)]);
+    const multi=venues.length>1;
+    const vs=venues.flatMap(v=>vis(v).map(vv=>({...vv,__venue:v}))).sort((a,b)=>(b.date||'').localeCompare(a.date||''));const n=vs.length,nCur=vis(cur).length;
     const sportOf=v=>typeof inferGameSport==='function'?inferGameSport(v,x.sport):x.sport;
+    const lockI='<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 018 0v4"/></svg>';
+    const badge={current:['CURRENT HOME','#dcfce7','#166534'],coming:['COMING SOON','#fef3c7','#92400e'],former:['FORMER HOME','#fee2e2','#991b1b']};
+    const venueCards=multi?`<div class="lv-sheet-sec"><div class="lv-sec-head"><span>STADIUMS</span><small>${venues.length}</small></div>${venues.map(v=>{const st=statusOf(v),[lab,bg,fg]=badge[st],c=vis(v).length,y=yearOf(v);
+      const meta=st==='coming'?`Expected to open ${y||'[year]'} · doesn’t count yet`:st==='former'?(c?`Retired stamp · ${c} visit${c===1?'':'s'}`:'Closed · log past visits here'):(c?`Stamped · ${c} visit${c===1?'':'s'}`:'Not visited yet · stamp to unlock');
+      return `<div class="lv-venue"><span class="lv-venue-stamp ${c?'on':''} ${st}" style="--ring:${teamColor(x)}">${c?(st==='former'?'<i>RETIRED</i>':'<b>✓</b>'):lockI}</span><span class="lv-venue-text"><em style="background:${bg};color:${fg}">${lab}${st==='former'&&y?` · CLOSED ${e(y)}`:st==='current'&&y?` · OPENED ${e(y)}`:''}</em><strong>${e(v.venue)}</strong><small>${e(v.city)}${v.state?`, ${e(v.state)}`:''}</small><small class="meta">${meta}</small></span></div>`;}).join('')}</div>`:'';
+    const anyFormerVisit=venues.some(v=>statusOf(v)==='former'&&vis(v).length);
+    const note=multi?(nCur?`<div class="lv-note blue"><strong>How it counts:</strong> the ${e(x.team)} are checked off because you’ve been to their current home.</div>`:anyFormerVisit?`<div class="lv-note gold"><strong>${e(cur.sport)} progress:</strong> visit ${e(cur.venue)} to check the ${e(x.team)} off again. Your earlier visits stay saved as Retired stamps.</div>`:''):'';
+    const shared=typeof STADIUMS!=='undefined'?STADIUMS.filter(o=>counted(o)&&(o.teamOf||o.id)!==(cur.teamOf||cur.id)&&norm(o.venue)===norm(cur.venue)&&norm(o.city)===norm(cur.city)):[];
+    const sharedHtml=shared.length?`<div class="lv-sheet-sec"><div class="lv-sec-head"><span>SHARED STADIUM</span><small>${e(cur.venue)}</small></div>${shared.map(o=>`<button type="button" class="lv-row lv-shared" data-lv-goto="${e(o.id)}">${logo(o,40)}<span class="lv-row-text"><strong>${e(o.team)}</strong><small>${visited(o)?`${vis(o).length} game${vis(o).length===1?'':'s'} seen here`:'Also plays here · not checked off yet'}</small></span>${chevR}</button>`).join('')}</div>`:'';
     const rowsHtml=vs.map(v=>{const d=v.date?new Date(v.date+'T12:00:00'):null;const home=v.teamMascot||v.teamName||x.team,away=v.opponentMascot||v.opponent||'Opponent';
       const has=v.teamScore!==''&&v.teamScore!=null&&v.opponentScore!==''&&v.opponentScore!=null;const out=(typeof visitOutcome==='function'?visitOutcome(v):v.outcome)||'';
       const seat=[v.section&&`Sec ${v.section}`,v.row&&`Row ${v.row}`,v.seat&&`Seat ${v.seat}`].filter(Boolean).join(' · ');
       const memo=String(v.memory||'').trim();
-      return `<button type="button" class="lv-visit" data-lv-visit="${e(v.id)}"><span class="lv-visit-date"><b>${d?String(d.getDate()).padStart(2,'0'):'—'}</b><small>${d?`${MON[d.getMonth()]} ${d.getFullYear()}`:'NO DATE'}</small></span><span class="lv-visit-text"><strong>${e(away)} ${v.neutralSite?'vs.':'@'} ${e(home)}</strong>${seat?`<small>${e(seat)}</small>`:''}${memo?`<small class="memo">“${e(memo.length>70?memo.slice(0,68)+'…':memo)}”</small>`:''}${sportOf(v)!==x.sport?`<small>${e(sportOf(v))} game</small>`:''}</span><span class="lv-visit-score">${has?`<b>${e(v.opponentScore)}–${e(v.teamScore)}</b>`:''}${out&&out!=='FINAL'?`<em class="res ${e(out.toLowerCase())}">${e(out)}</em>`:''}</span></button>`;}).join('');
+      return `<button type="button" class="lv-visit" data-lv-visit="${e(v.id)}" data-lv-vvenue="${e(v.__venue.id)}"><span class="lv-visit-date"><b>${d?String(d.getDate()).padStart(2,'0'):'—'}</b><small>${d?`${MON[d.getMonth()]} ${d.getFullYear()}`:'NO DATE'}</small></span><span class="lv-visit-text"><strong>${e(away)} ${v.neutralSite?'vs.':'@'} ${e(home)}</strong>${seat?`<small>${e(seat)}</small>`:''}${memo?`<small class="memo">“${e(memo.length>70?memo.slice(0,68)+'…':memo)}”</small>`:''}${sportOf(v)!==x.sport?`<small>${e(sportOf(v))} game</small>`:''}${multi?`<small class="lv-at">${e(v.__venue.venue)}${statusOf(v.__venue)==='former'?' · former home':''}</small>`:''}</span><span class="lv-visit-score">${has?`<b>${e(v.opponentScore)}–${e(v.teamScore)}</b>`:''}${out&&out!=='FINAL'?`<em class="res ${e(out.toLowerCase())}">${e(out)}</em>`:''}</span></button>`;}).join('');
     const starred=inBucket(x.id);
     const el=document.createElement('div');el.id='lvSheet';el.className='lv-sheet-wrap';
     el.innerHTML=`<div class="lv-backdrop" data-lv-close></div><div class="lv-sheet" role="dialog" aria-modal="true" aria-label="${e(x.team)}"><span class="lv-grab" aria-hidden="true"></span>
-      <div class="lv-sheet-head">${logo(x,72,{on:true})}<div><h3>${e(x.team)}</h3><span>${e(x.venue)} · ${e(x.city)}${x.state?`, ${e(x.state)}`:''}</span><small>${e(x.sport)} · ${e(x.conference||'')}${x.division&&(x.sport==='NFL'||x.sport==='MLB')?` ${e(x.division)}`:''}</small></div>
+      <div class="lv-sheet-head">${logo(x,72,{on:true})}<div><h3>${e(x.team)}</h3><span>${e(cur.venue)} · ${e(cur.city)}${cur.state?`, ${e(cur.state)}`:''}</span><small>${e(x.sport)} · ${e(x.conference||'')}${x.division&&(x.sport==='NFL'||x.sport==='MLB')?` ${e(x.division)}`:''}</small></div>
         <button type="button" class="lv-star ${starred?'on':''}" id="lvStar" aria-pressed="${starred}" aria-label="${starred?'Remove from':'Add to'} bucket list">${starSvg(starred)}</button><button type="button" class="lv-x" data-lv-close aria-label="Close"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
-      ${n?`<div class="lv-stats"><div><b>${n}</b><small>Visit${n===1?'':'s'}</small></div><div><b>${e(tierLabel(n))}</b><small>Passport stamp</small></div></div>
-      <div class="lv-sheet-sec"><div class="lv-sec-head"><span>YOUR VISITS</span><small>Newest first</small></div>${rowsHtml}</div>`:
+      ${n?`<div class="lv-stats"><div><b>${n}</b><small>Visit${n===1?'':'s'}${multi?' (all stadiums)':''}</small></div><div><b>${nCur?e(tierLabel(nCur)):'—'}</b><small>${multi?'Current stamp':'Passport stamp'}</small></div></div>`:''}
+      ${venueCards}${note}${sharedHtml}
+      ${n?`<div class="lv-sheet-sec"><div class="lv-sec-head"><span>YOUR VISITS</span><small>${multi?'By date, all stadiums':'Newest first'}</small></div>${rowsHtml}</div>`:
       `<div class="lv-waiting"><strong>Your stamp is waiting</strong><span>Log a game here to unlock this stadium’s passport stamp.${starred?'':' Tap the star to add it to your bucket list.'}</span></div>`}
       <div class="lv-actions"><button type="button" class="primary" id="lvAddVisit">+ Add a visit</button>${n?'<button type="button" id="lvStamp">See passport stamp</button>':'<button type="button" id="lvNext">Next home game</button>'}</div>
-      ${n?'<p class="lv-hint">Tap any visit to open its visit page</p>':''}</div>`;
+      ${n?'<p class="lv-hint">Tap any visit to open its visit page</p>':''}<button type="button" class="lv-manage" id="lvManage">Manage stadiums</button></div>`;
     document.body.appendChild(el);document.documentElement.classList.add('lv-sheet-open');
     el.querySelectorAll('[data-lv-close]').forEach(b=>b.onclick=closeSheet);
     el.querySelector('#lvStar').onclick=()=>{toggleBucket(x.id);openSheet(id,root);window.renderLeaguesV2(root);};
-    el.querySelectorAll('[data-lv-visit]').forEach(b=>b.onclick=()=>{closeSheet();openDetail(x.id,b.dataset.lvVisit);});
-    el.querySelector('#lvAddVisit').onclick=async()=>{closeSheet();await openDetail(x.id);document.getElementById('vvAdd')?.click();};
+    el.querySelectorAll('[data-lv-visit]').forEach(b=>b.onclick=()=>{closeSheet();openDetail(b.dataset.lvVvenue||x.id,b.dataset.lvVisit);});
+    el.querySelectorAll('[data-lv-goto]').forEach(b=>b.onclick=()=>openSheet(b.dataset.lvGoto,root));
+    el.querySelector('#lvManage').onclick=()=>window.openStadiumManager(cur.teamOf||cur.id,()=>{window.renderLeaguesV2(root);openSheet(cur.id,root);});
+    el.querySelector('#lvAddVisit').onclick=async()=>{closeSheet();await openDetail(cur.id);document.getElementById('vvAdd')?.click();};
     const st=el.querySelector('#lvStamp');if(st)st.onclick=()=>{closeSheet();window.openPassportLeague?.(x.sport);};
     const nx=el.querySelector('#lvNext');if(nx)nx.onclick=async()=>{nx.disabled=true;nx.textContent='Checking…';const g=await nextHome(x);nx.textContent=g?`${new Date(g.date+'T12:00:00').toLocaleDateString(undefined,{weekday:'short',month:'short',day:'numeric'})} vs ${g.opponent}`:'No upcoming home games found';};
   }
+
+  /* ---------- stadium manager ---------- */
+  window.openStadiumManager=function(teamId,onDone){
+    closeSheet();const base=STADIUMS.find(r=>r.id===teamId);if(!base)return;
+    const draw=(msg='')=>{
+      closeSheet();const list=venuesOf(base).slice();
+      const el=document.createElement('div');el.id='lvSheet';el.className='lv-sheet-wrap';
+      const stBtn=(v,k,l)=>`<button type="button" class="${statusOf(v)===k?'on':''}" data-st="${k}" data-id="${e(v.id)}">${l}</button>`;
+      el.innerHTML=`<div class="lv-backdrop" data-lv-close></div><div class="lv-sheet" role="dialog" aria-modal="true" aria-label="Manage stadiums"><span class="lv-grab" aria-hidden="true"></span>
+        <div class="lv-sheet-head">${logo(base,56,{on:true})}<div><h3>${e(base.team)}</h3><span>Stadiums</span></div><button type="button" class="lv-x" data-lv-close aria-label="Close"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
+        ${msg?`<div class="lv-note gold">${e(msg)}</div>`:''}
+        ${list.map(v=>{const c=vis(v).length;return `<div class="lv-mg-venue"><div class="lv-mg-top"><strong>${e(v.venue)}</strong><small>${e(v.city)}${v.state?`, ${e(v.state)}`:''} · ${c} visit${c===1?'':'s'}${yearOf(v)?` · ${statusOf(v)==='former'?'closed':'opens/opened'} ${e(yearOf(v))}`:''}</small></div>
+          <div class="lv-seg" role="group" aria-label="Status for ${e(v.venue)}">${stBtn(v,'current','Current')}${stBtn(v,'coming','Coming soon')}${stBtn(v,'former','Former')}</div>
+          ${v.teamOf?`<div class="lv-mg-actions"><button type="button" data-edit="${e(v.id)}">Edit name</button>${c?'':`<button type="button" class="danger" data-del="${e(v.id)}">Remove</button>`}</div>`:''}</div>`;}).join('')}
+        <form class="lv-mg-form" id="lvAddVenue"><strong>Add a stadium</strong>
+          <label>Stadium name<input name="venue" required placeholder="New stadium name"></label>
+          <div class="lv-mg-row"><label>City<input name="city" value="${e(base.city)}"></label><label>State<input name="state" value="${e(base.state)}" maxlength="3"></label></div>
+          <div class="lv-mg-row"><label>Status<select name="status"><option value="coming">Coming soon</option><option value="current">Current</option><option value="former">Former</option></select></label><label>Year<input name="year" inputmode="numeric" placeholder="Opening or closing year" maxlength="4"></label></div>
+          <p class="lv-mg-help">Past visits always stay with the stadium where they happened. Marking a stadium Current makes the old current one Former automatically.</p>
+          <button type="submit" class="lv-mg-save">Save stadium</button></form></div>`;
+      document.body.appendChild(el);document.documentElement.classList.add('lv-sheet-open');
+      const done=()=>{closeSheet();onDone?.();};
+      el.querySelectorAll('[data-lv-close]').forEach(b=>b.onclick=done);
+      el.querySelectorAll('[data-st]').forEach(b=>b.onclick=()=>{const v=STADIUMS.find(r=>r.id===b.dataset.id);let y=yearOf(v);
+        if(b.dataset.st!==statusOf(v)){const ask=b.dataset.st==='former'?'Year it closed (optional):':b.dataset.st==='coming'?'Expected opening year (optional):':'Year it opened (optional):';const ans=prompt(ask,y||'');if(ans===null)return;y=ans.trim();}
+        applyVenueStatus(b.dataset.id,b.dataset.st,y);draw(b.dataset.st==='current'?'Saved. Any other current stadium is now marked Former.':'Saved.');});
+      el.querySelectorAll('[data-edit]').forEach(b=>b.onclick=()=>{const v=STADIUMS.find(r=>r.id===b.dataset.edit);const name=prompt('Stadium name',v.venue);if(!name)return;const city=prompt('City',v.city)??v.city;const st=prompt('State',v.state)??v.state;updateTeamVenue(v.id,{venue:name.trim(),city:city.trim(),state:st.trim()});draw('Saved.');});
+      el.querySelectorAll('[data-del]').forEach(b=>b.onclick=()=>{if(!confirm('Remove this stadium? It has no visits, so nothing else changes.'))return;removeTeamVenue(b.dataset.del);draw('Removed.');});
+      el.querySelector('#lvAddVenue').onsubmit=ev=>{ev.preventDefault();const f=new FormData(ev.target);const venue=String(f.get('venue')||'').trim();if(!venue)return;
+        addTeamVenue(base.id,{venue,city:String(f.get('city')||'').trim(),state:String(f.get('state')||'').trim().toUpperCase(),status:String(f.get('status')),year:String(f.get('year')||'').trim()});draw('Stadium added.');};
+    };
+    draw();
+  };
 
   function wireHeader(root,sport){
     root.querySelector('#lvBucket').onclick=()=>{view.bucket=!view.bucket;view.group=null;window.renderLeaguesV2(root);window.scrollTo({top:0});};

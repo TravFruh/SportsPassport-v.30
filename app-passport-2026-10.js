@@ -82,7 +82,7 @@
     return x.conference||'Independent';
   }
   function pagesFor(sport){
-    const rows=STADIUMS.filter(x=>x.sport===sport);const map=new Map();
+    const rows=STADIUMS.filter(x=>x.sport===sport&&(typeof isCountedVenue!=='function'||isCountedVenue(x)));const map=new Map();
     rows.forEach(x=>{const n=pageName(x);if(!map.has(n))map.set(n,[]);map.get(n).push(x);});
     const pages=[...map.entries()].map(([name,list])=>({name,list:list.sort((a,b)=>a.team.localeCompare(b.team))}));
     if(sport==='NFL'||sport==='MLB')return pages;
@@ -124,13 +124,17 @@
     const done=page.list.filter(isVisited).length,total=page.list.length,complete=done===total;
     return `<div class="sp-seal-row"><svg viewBox="0 0 100 100" class="sp-seal ${complete?'on':''}" aria-hidden="true"><g fill="none" stroke="#b7922c" stroke-width="2"><circle cx="50" cy="50" r="44" stroke-dasharray="3 4"/><circle cx="50" cy="50" r="34"/></g><path d="M50 30l5.5 11.5 12.5 1.8-9 8.8 2.1 12.4L50 58.6 38.9 64.5 41 52.1l-9-8.8 12.5-1.8z" fill="${complete?'#d6b656':'none'}" stroke="#b7922c" stroke-width="2"/></svg><div><strong>${e(page.name)} ${sport==='NFL'||sport==='MLB'?'Division':'Conference'} Seal</strong><span>${complete?'Pressed! Every stadium on this page is stamped.':`Stamp every stadium on this page to press the gold seal · ${done} of ${total}`}</span><div class="sp-bar"><i style="width:${Math.round(done/total*100)}%;background:#b7922c"></i></div></div></div>`;
   }
+  function retiredList(sport){return STADIUMS.filter(x=>x.sport===sport&&typeof venueStatus==='function'&&venueStatus(x)==='former'&&isVisited(x));}
+  function retiredHtml(sport){const list=retiredList(sport);if(!list.length)return '';
+    return `<section class="sp-page" id="sp-page-retired"><header><span>RETIRED VENUES</span><small>${list.length} STAMP${list.length===1?'':'S'} · CAN’T BE EARNED AGAIN</small></header><div class="sp-grid">${list.map((x,i)=>{const d=stampData(x),style=styleFor(x,i,hash(x.id)%11);const y=typeof venueYear==='function'?venueYear(x):'';return `<button type="button" class="sp-slot" data-sp-open="${e(x.id)}" aria-label="${e(x.venue)} retired stamp"><span class="sp-stamp sp-retired" style="transform:rotate(${rot(x)}deg)">${venueStamp(style,{...d,uid:'spx-'+hash(x.id)})}<i>RETIRED</i></span><strong>${e(x.venue)}</strong><small>${e(x.team)}${y?` · closed ${e(y)}`:''}</small></button>`;}).join('')}</div></section>`;}
   function renderLeague(root,sport){
     const L=LEAGUES[sport],pages=pagesFor(sport),rows=pages.flatMap(p=>p.list),done=rows.filter(isVisited).length;
     const bonus=bonusStamps();
     root.innerHTML=`<div class="sp-book sp-league">
       <div class="sp-league-head"><button type="button" class="sp-back" id="spBack" aria-label="Back to passport"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg></button><div><strong>${e(L.name)}</strong><span>${done} of ${rows.length} stamped · ${pages.length} pages</span></div><div class="sp-mini-bar"><i style="width:${Math.max(3,Math.round(done/rows.length*100))}%"></i></div></div>
-      <div class="sp-tabs" role="tablist">${pages.map((p,i)=>`<button type="button" class="${i?'':'on'}" data-sp-page="${i}">${e(p.name)}</button>`).join('')}<button type="button" data-sp-page="bonus">Bonus</button></div>
+      <div class="sp-tabs" role="tablist">${pages.map((p,i)=>`<button type="button" class="${i?'':'on'}" data-sp-page="${i}">${e(p.name)}</button>`).join('')}${retiredList(sport).length?'<button type="button" data-sp-page="retired">Retired</button>':''}<button type="button" data-sp-page="bonus">Bonus</button></div>
       ${pages.map((p,pi)=>{const seed=hash(sport+p.name)%11;const d=p.list.filter(isVisited).length;return `<section class="sp-page" id="sp-page-${pi}"><header><span>${e(p.name.toUpperCase())}</span><small>PAGE ${String(pi+1).padStart(2,'0')} · ${d} / ${p.list.length} STAMPED</small></header><div class="sp-grid">${p.list.map((x,i)=>slotHtml(x,i,seed)).join('')}</div>${sealHtml(p,sport)}<footer><span>${e(sport)} · ${done} / ${rows.length}</span><span>— ${String(pi+1).padStart(2,'0')} —</span></footer></section>`;}).join('')}
+      ${retiredHtml(sport)}
       <section class="sp-page" id="sp-page-bonus"><header><span>BONUS STAMPS</span><small>EARNED ACROSS ALL LEAGUES</small></header><div class="sp-grid">${bonus.map(b=>{const sp=b.sport&&LEAGUES[b.sport]?b.sport:sport;const ink=LEAGUES[sp].color;const dp=dparts(b.date);return b.earned?`<div class="sp-slot"><span class="sp-stamp" style="transform:rotate(${(hash(b.key)%13)-6}deg)">${genericStamp(LEAGUES[sp].shape,ink,(b.venue||b.label).toUpperCase(),b.big,dp.md?`${dp.md} ${dp.y}`:'')}</span><strong>${e(b.label)}</strong><small>${b.earned>1?`Earned ${b.earned} times`:'Earned'}</small></div>`:`<div class="sp-slot locked"><span class="sp-stamp">${genericStamp(LEAGUES[sport].shape,'',0,0,0,{locked:true})}<span class="sp-lock">${lockIcon}</span></span><strong>${e(b.label)}</strong><small>${e(b.how)}</small></div>`;}).join('')}</div></section>
     </div>`;
     root.querySelector('#spBack').onclick=()=>{view.league=null;window.renderPassportBook(root);window.scrollTo({top:0});};
@@ -140,11 +144,12 @@
   function wireOpen(root){root.querySelectorAll('[data-sp-open]').forEach(b=>b.onclick=()=>{if(typeof openDetail==='function')openDetail(b.dataset.spOpen);});}
 
   function renderHome(root){
-    const tracked=STADIUMS.filter(x=>ORDER.includes(x.sport));
+    const tracked=STADIUMS.filter(x=>ORDER.includes(x.sport)&&(typeof isCountedVenue!=='function'||isCountedVenue(x)));
+    const visitedAll=STADIUMS.filter(x=>ORDER.includes(x.sport)&&isVisited(x));
     const visited=tracked.filter(isVisited);const bonus=bonusStamps();
     const seals=ORDER.flatMap(s=>pagesFor(s)).filter(p=>p.list.every(isVisited)).length;
     const badges=bonus.filter(b=>b.earned).length+seals;
-    const recent=visited.map(x=>({x,last:visitsOf(x).slice().sort(byDate).pop()})).sort((a,b)=>(b.last?.date||'').localeCompare(a.last?.date||'')).slice(0,3);
+    const recent=visitedAll.map(x=>({x,last:visitsOf(x).slice().sort(byDate).pop()})).sort((a,b)=>(b.last?.date||'').localeCompare(a.last?.date||'')).slice(0,3);
     const leaguesStamped=ORDER.filter(s=>tracked.some(x=>x.sport===s&&isVisited(x))).length;
     const almost=[];
     if(leaguesStamped<4)almost.push({t:'Grand Slam',s:`Stamp a venue in every league · ${leaguesStamped} of 4`,p:leaguesStamped/4,c:'#b7922c'});
@@ -155,7 +160,7 @@
     const nb=bonus.find(b=>!b.earned);if(nb&&almost.length<3)almost.push({t:nb.label,s:nb.how,p:0,c:'#b7922c'});
     root.innerHTML=`<div class="sp-book sp-home">
       <div class="sp-cover"><svg width="88" height="88" viewBox="0 0 96 96" fill="none" stroke="#d6b656" stroke-width="2" aria-hidden="true"><circle cx="48" cy="48" r="44"/><circle cx="48" cy="48" r="38" stroke-dasharray="2 4"/><path d="M22 58c6-14 16-22 26-22s20 8 26 22"/><path d="M18 62h60"/><path d="M30 62v-8M40 62v-12M48 62v-14M56 62v-12M66 62v-8"/><path d="M48 18l3 7h7l-6 4 2 7-6-4-6 4 2-7-6-4h7z" fill="#d6b656" stroke="none"/></svg><span class="sp-kicker">UNITED STATES OF SPORT</span><h2>STADIUM PASSPORT</h2><div class="sp-holder"><span>HOLDER · TRAVIS</span><span>NO. SP-${String(visited.length).padStart(4,'0')}</span></div></div>
-      <div class="sp-tally"><div><b>${visited.length}</b><span>Stamps</span></div><div><b>${badges}</b><span>Badges</span></div><div><b class="dim">${tracked.length-visited.length}</b><span>Still locked</span></div></div>
+      <div class="sp-tally"><div><b>${visitedAll.length}</b><span>Stamps</span></div><div><b>${badges}</b><span>Badges</span></div><div><b class="dim">${tracked.length-visited.length}</b><span>Still locked</span></div></div>
       <h3 class="sp-h">CHAPTERS</h3>
       <div class="sp-chapters">${ORDER.map(s=>{const rows=tracked.filter(x=>x.sport===s),d=rows.filter(isVisited).length;return `<button type="button" class="sp-chapter" data-sp-league="${s}" style="--c:${LEAGUES[s].color}"><b>${e(LEAGUES[s].name)}</b><span>${d} of ${rows.length} stamped</span><div class="sp-bar"><i style="width:${rows.length?Math.round(d/rows.length*100):0}%;background:${LEAGUES[s].color}"></i></div></button>`;}).join('')}</div>
       ${recent.length?`<h3 class="sp-h">RECENTLY STAMPED</h3><div class="sp-recent">${recent.map(({x})=>{const pages=pagesFor(x.sport),p=pages.find(pg=>pg.list.includes(x)),i=p?p.list.indexOf(x):0,seed=hash(x.sport+(p?.name||''))%11;return `<button type="button" class="sp-recent-item" data-sp-open="${e(x.id)}" aria-label="${e(x.venue)} stamp"><span class="sp-stamp" style="transform:rotate(${rot(x)}deg)">${venueStamp(styleFor(x,i,seed),{...stampData(x),uid:`spr-${hash(x.id)}`})}</span></button>`;}).join('')}</div>`:''}

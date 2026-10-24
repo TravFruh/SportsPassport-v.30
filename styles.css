@@ -1037,3 +1037,35 @@ button.secondary{color:#fff;border-color:rgba(255,255,255,.5);background:rgba(8,
 .lv-actions button.primary{background:#142038;color:#fff;border:0}
 .lv-hint{margin:-6px 0 0;text-align:center;font-size:13px;color:#4b5563}
 .lv-bucket-row .lv-tag{align-self:flex-start;margin-top:4px}
+
+/* ===== v40: multiple stadiums ===== */
+.lv-venue{display:flex;gap:12px;align-items:center;border:1px solid #e5e7eb;border-radius:16px;padding:12px}
+.lv-venue-stamp{width:56px;height:56px;border-radius:50%;border:2px dashed #b6bcc6;display:flex;align-items:center;justify-content:center;color:#6b7280;flex-shrink:0;position:relative;overflow:hidden}
+.lv-venue-stamp.coming{border-color:#f59e0b;color:#92400e}
+.lv-venue-stamp.on{border:4px solid var(--ring);color:var(--ring)}
+.lv-venue-stamp b{font-size:22px}
+.lv-venue-stamp i{position:absolute;left:-6px;right:-6px;top:50%;transform:translateY(-50%) rotate(-18deg);background:#b91c1c;color:#fff;font:normal 400 11px Impact,'Arial Narrow',sans-serif;letter-spacing:.12em;text-align:center;padding:3px 0}
+.lv-venue-text{flex:1;display:flex;flex-direction:column;gap:3px;min-width:0}
+.lv-venue-text em{align-self:flex-start;font-style:normal;font-size:10px;font-weight:800;letter-spacing:.08em;border-radius:999px;padding:3px 9px}
+.lv-venue-text strong{font-size:15px}.lv-venue-text small{font-size:13px;color:#4b5563}.lv-venue-text .meta{font-size:12px;font-weight:600;color:#374151}
+.lv-note{border-radius:14px;padding:12px 14px;font-size:13px;line-height:1.45}
+.lv-note.blue{background:#eef2ff;color:#1e3a8a}.lv-note.gold{background:#fffbeb;border:1px solid #fcd34d;color:#78350f}
+.lv-shared{border-top:0;border-radius:14px;background:#f4f5f7;padding:10px 12px;min-height:56px}
+.lv-at{font-size:11px!important;font-weight:700;color:#6b7280!important}
+.lv-manage{min-height:44px;border:0;background:none;color:#1e3a8a;font-weight:700;font-size:14px;cursor:pointer}
+.lv-mg-venue{border:1px solid #e5e7eb;border-radius:16px;padding:12px;display:flex;flex-direction:column;gap:10px}
+.lv-mg-top{display:flex;flex-direction:column;gap:2px}.lv-mg-top strong{font-size:15px}.lv-mg-top small{font-size:12px;color:#4b5563}
+.lv-seg{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}
+.lv-seg button{min-height:40px;border-radius:10px;border:1px solid #d1d5db;background:#fff;font-weight:600;font-size:13px;color:#111827;cursor:pointer}
+.lv-seg button.on{background:#111827;border-color:#111827;color:#fff;font-weight:700}
+.lv-mg-actions{display:flex;gap:8px}.lv-mg-actions button{min-height:38px;padding:0 12px;border-radius:10px;border:1px solid #d1d5db;background:#fff;font-weight:600;font-size:13px;cursor:pointer}
+.lv-mg-actions .danger{border-color:#fecaca;color:#b91c1c}
+.lv-mg-form{background:#f4f5f7;border-radius:16px;padding:14px;display:flex;flex-direction:column;gap:10px}
+.lv-mg-form strong{font:400 19px Impact,'Arial Narrow',sans-serif}
+.lv-mg-form label{display:flex;flex-direction:column;gap:5px;font-size:13px;font-weight:700;color:#374151;min-width:0}
+.lv-mg-form input,.lv-mg-form select{min-height:44px;border:1px solid #d1d5db;border-radius:10px;padding:0 10px;font-size:16px;background:#fff;color:#111827;width:100%;box-sizing:border-box}
+.lv-mg-row{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.lv-mg-help{margin:0;font-size:12px;color:#4b5563;line-height:1.4}
+.lv-mg-save{min-height:48px;border-radius:12px;border:0;background:#142038;color:#fff;font-weight:700;font-size:15px;cursor:pointer}
+.sp-retired{position:relative}
+.sp-retired i{position:absolute;left:-4%;right:-4%;top:50%;transform:translateY(-50%) rotate(-18deg);background:#b91c1c;color:#fff;font:normal 400 15px Impact,'Arial Narrow',sans-serif;letter-spacing:.2em;text-align:center;padding:5px 0;box-shadow:0 2px 6px rgba(0,0,0,.25)}

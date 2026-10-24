@@ -42,6 +42,41 @@ function applyTeamEdits(){
 }
 function saveTeamEdits(){if(safeSetItem("stadiumPassportTeamEdits",JSON.stringify(teamEdits)))markLocalChanged();}
 applyTeamEdits();
+/* ===== Teams with more than one stadium (v40) =====
+   Extra stadiums are full venue entries linked to the team's original entry (teamOf).
+   Status per entry: current (counts toward progress), coming (preview, not counted), former (retired).
+   Visits always stay with the entry (stadium) where they happened. */
+const VENUES_KEY='stadiumPassportVenuesV1';
+function readVenueStore(){try{const v=JSON.parse(localStorage.getItem(VENUES_KEY)||'{}')||{};return {added:Array.isArray(v.added)?v.added:[],status:v.status&&typeof v.status==='object'?v.status:{}};}catch{return {added:[],status:{}};}}
+let venueStore=readVenueStore();
+function saveVenueStore(){if(safeSetItem(VENUES_KEY,JSON.stringify(venueStore)))markLocalChanged();}
+function syncAddedVenue(v){const base=STADIUMS.find(r=>r.id===v.teamOf);if(base){v.team=base.team;v.sport=base.sport;v.level=base.level;v.conference=base.conference;v.division=base.division;if(v.lat==null||v.lat===''){v.lat=base.lat;v.lng=base.lng;}}return v;}
+function installAddedVenues(){venueStore.added.forEach(v=>{if(!STADIUMS.some(r=>r.id===v.id))STADIUMS.push(syncAddedVenue({...v}));});}
+installAddedVenues();
+function venueStatus(x){return venueStore.status[x?.id]?.status||x?.venueStatus||'current';}
+function venueYear(x){return venueStore.status[x?.id]?.year||x?.opened||'';}
+const teamKeyOf=x=>x?.teamOf||x?.id;
+function teamVenues(x){const k=teamKeyOf(x);return STADIUMS.filter(r=>teamKeyOf(r)===k);}
+const isCountedVenue=x=>isTrackedVenue(x)&&venueStatus(x)==='current';
+const isListedVenue=x=>isTrackedVenue(x)&&venueStatus(x)!=='coming';
+function setVenueStatus(id,status,year){venueStore.status[id]={...(venueStore.status[id]||{}),status,year:year??venueStore.status[id]?.year??''};}
+function addTeamVenue(baseId,{venue,city,state,status,year}){
+  const base=STADIUMS.find(r=>r.id===baseId);if(!base)return null;
+  let n=2;while(STADIUMS.some(r=>r.id===`${base.id}-S${n}`))n++;
+  const entry=syncAddedVenue({id:`${base.id}-S${n}`,teamOf:base.id,venue,city,state,capacity:'',opened:year||'',lat:base.lat,lng:base.lng});
+  venueStore.added.push({id:entry.id,teamOf:base.id,venue,city,state,opened:year||'',lat:base.lat,lng:base.lng});
+  STADIUMS.push(entry);applyVenueStatus(entry.id,status,year);return entry;
+}
+function applyVenueStatus(id,status,year){
+  const x=STADIUMS.find(r=>r.id===id);if(!x)return;
+  if(status==='current'){teamVenues(x).forEach(o=>{if(o.id!==id&&venueStatus(o)==='current')setVenueStatus(o.id,'former',year||String(new Date().getFullYear()));});}
+  setVenueStatus(id,status,year);
+  const rec=venueStore.added.find(v=>v.id===id);if(rec&&year)rec.opened=year;
+  saveVenueStore();
+}
+function updateTeamVenue(id,{venue,city,state}){const rec=venueStore.added.find(v=>v.id===id),x=STADIUMS.find(r=>r.id===id);if(!rec||!x)return;Object.assign(rec,{venue,city,state});Object.assign(x,{venue,city,state});saveVenueStore();}
+function removeTeamVenue(id){if(getVisits(id).length)return false;venueStore.added=venueStore.added.filter(v=>v.id!==id);delete venueStore.status[id];const i=STADIUMS.findIndex(r=>r.id===id);if(i>=0)STADIUMS.splice(i,1);saveVenueStore();return true;}
+function mergeVenueStore(inc){if(!inc||typeof inc!=='object')return;(inc.added||[]).forEach(v=>{if(v&&v.id&&!venueStore.added.some(a=>a.id===v.id)){venueStore.added.push(v);if(!STADIUMS.some(r=>r.id===v.id))STADIUMS.push(syncAddedVenue({...v}));}});for(const [k,v] of Object.entries(inc.status||{}))if(!(k in venueStore.status))venueStore.status[k]=v;saveVenueStore();}
 const $ = s => document.querySelector(s);
 
 function markLocalChanged(){safeSetItem("stadiumPassportLocalUpdatedAt",new Date().toISOString());window.StadiumCloud?.scheduleSync?.();}
@@ -225,7 +260,7 @@ function renderAddVisitPicker(){
   $("#addVisitSports").innerHTML=sports.map(s=>`<button type="button" class="${s===addVisitSport?'active':''}" data-add-sport="${s}"><span>${s}</span><small>${s==='NFL'?'Pro Football':s==='CFB'?'College Football':s==='MLB'?'Baseball':s==='CBB'?'College Basketball':'Pro Basketball'}</small></button>`).join('');
   $("#addVisitSports").querySelectorAll('button').forEach(b=>b.onclick=()=>{addVisitSport=b.dataset.addSport;renderAddVisitPicker();});
   const q=normalizeTeamName($("#addVisitSearch")?.value||'');
-  const rows=STADIUMS.filter(x=>isTrackedVenue(x)&&(addVisitSport==='ALL'||x.sport===addVisitSport)&&(!q||normalizeTeamName([x.team,x.venue,x.city,x.state].join(' ')).includes(q))).slice(0,120);
+  const rows=STADIUMS.filter(x=>isListedVenue(x)&&(addVisitSport==='ALL'||x.sport===addVisitSport)&&(!q||normalizeTeamName([x.team,x.venue,x.city,x.state].join(' ')).includes(q))).slice(0,120);
   $("#addVisitResults").innerHTML=rows.length?rows.map(x=>`<button type="button" class="add-visit-result" data-add-id="${x.id}"><span class="list-team-logo"><img data-logo-sport="${x.sport}" data-logo-name="${escapeHtml(x.team)}" alt="" hidden><span class="list-logo-fallback">${initials(x.team)}</span></span><span><strong>${escapeHtml(x.team)}</strong><small>${escapeHtml(x.venue)} · ${escapeHtml(x.city)}${x.state?`, ${escapeHtml(x.state)}`:''}</small></span><b>${x.sport}</b></button>`).join(''):'<p class="empty">No matching teams or venues.</p>';
   $("#addVisitResults").querySelectorAll('[data-add-id]').forEach(b=>b.onclick=()=>{$("#addVisitDialog").close();openDetail(b.dataset.addId);});
   hydrateOverviewLogos();
@@ -239,7 +274,7 @@ function bindAddVisitDialog(){
   dialog?.addEventListener('click',event=>{if(event.target===dialog)close();});
 }
 function renderSummary(){
-  const cards=trackedSports.map(s=>{const rows=STADIUMS.filter(x=>x.sport===s),v=rows.filter(x=>getEntry(x.id).visited).length,pct=rows.length?Math.round(v/rows.length*100):0;return `<div class="stat"><strong>${v}/${rows.length}</strong><span>${s} visited</span><div class="completion-bar"><span style="width:${pct}%"></span></div></div>`});
+  const cards=trackedSports.map(s=>{const rows=STADIUMS.filter(x=>x.sport===s&&isCountedVenue(x)),v=rows.filter(x=>getEntry(x.id).visited).length,pct=rows.length?Math.round(v/rows.length*100):0;return `<div class="stat"><strong>${v}/${rows.length}</strong><span>${s} visited</span><div class="completion-bar"><span style="width:${pct}%"></span></div></div>`});
   $("#summary").innerHTML=cards.join("");
 }
 const logoCache = JSON.parse(localStorage.getItem("stadiumPassportLogoCacheV2") || "{}");
@@ -400,7 +435,7 @@ function renderChecklist(){
   $("#controls").hidden=true;
   const leagueNames={NFL:"NFL",MLB:"MLB",NBA:"NBA",CFB:"College Football",CBB:"College Basketball"};
   const html=trackedSports.map(sport=>{
-    const rows=STADIUMS.filter(x=>x.sport===sport);
+    const rows=STADIUMS.filter(x=>x.sport===sport&&isCountedVenue(x));
     const conferences=[...new Set(rows.map(x=>x.conference))].sort((a,b)=>a.localeCompare(b));
     return `<section class="checklist-league"><div class="checklist-league-heading"><h2>${leagueNames[sport]}</h2><span>${rows.filter(x=>getEntry(x.id).visited).length}/${rows.length} visited</span></div>${conferences.map(conf=>{const cr=rows.filter(x=>x.conference===conf),divisions=[...new Set(cr.map(x=>x.division||"Other"))];return `<div class="checklist-conference"><h3>${headingWithBadge(conf,'conference',sport,conf)}</h3>${divisions.map(div=>`<div class="checklist-division"><h4>${headingWithBadge(div,'division',sport,conf)}</h4><div class="checklist-grid">${cr.filter(x=>(x.division||"Other")===div).sort((a,b)=>a.team.localeCompare(b.team)).map(checklistItem).join("")}</div></div>`).join("")}</div>`;}).join("")}</section>`;
   }).join("");
@@ -417,13 +452,13 @@ const STATE_NAME_TO_ABBR=Object.fromEntries(Object.entries(US_STATE_NAMES).map((
 const SCRATCH_GEOJSON_URL='https://raw.githubusercontent.com/PublicaMundi/MappingAPI/master/data/geojson/us-states.json';
 function scratchedStatesForSport(sport){
   const out={};
-  STADIUMS.filter(x=>x.sport===sport&&US_STATE_NAMES[x.state]).forEach(x=>{
+  STADIUMS.filter(x=>x.sport===sport&&isListedVenue(x)&&US_STATE_NAMES[x.state]).forEach(x=>{
     const visits=getVisits(x.id).length;
     if(visits){out[x.state]??={venues:new Set(),visits:0};out[x.state].venues.add(x.id);out[x.state].visits+=visits;}
   });
   return out;
 }
-function stateSportRows(sport,abbr){return STADIUMS.filter(x=>x.sport===sport&&x.state===abbr);}
+function stateSportRows(sport,abbr){return STADIUMS.filter(x=>x.sport===sport&&isListedVenue(x)&&x.state===abbr);}
 function scratchStateDetailsHtml(sport,abbr){
   const all=stateSportRows(sport,abbr),visited=all.filter(x=>getVisits(x.id).length),remaining=all.filter(x=>!getVisits(x.id).length);
   const pct=all.length?Math.round(visited.length/all.length*100):0;
@@ -463,7 +498,7 @@ async function renderAchievements(){
   const milestones=[1,10,25,50,100,250,500].map(n=>{const sorted=visitedRows.map(x=>({x,date:firstVisitDate(x.id)})).filter(v=>v.date).sort((a,b)=>a.date.localeCompare(b.date));return badge('🏟️',n===1?'First Stadium':`${n} Stadiums`,n===1?'Save your first stadium visit.':`Visit ${n} unique stadiums.`,uniqueCount>=n,sorted[n-1]?.date||'');});
   const groupBadges=[];
   ['NFL','MLB','NBA'].forEach(sport=>{
-    const rows=STADIUMS.filter(x=>x.sport===sport),confs=[...new Set(rows.map(x=>x.conference))].sort((a,b)=>a.localeCompare(b));
+    const rows=STADIUMS.filter(x=>x.sport===sport&&isCountedVenue(x)),confs=[...new Set(rows.map(x=>x.conference))].sort((a,b)=>a.localeCompare(b));
     confs.forEach(conf=>{
       const cr=rows.filter(x=>x.conference===conf),divs=[...new Set(cr.map(x=>x.division))];
       divs.forEach(div=>{const dr=cr.filter(x=>x.division===div),date=completionDate(dr);groupBadges.push(badge(sport==='NFL'?'🏈':sport==='MLB'?'⚾':'🏀',`${conf} ${div}`,`Visit every ${sport} venue in this division.`,!!date,date));});
@@ -472,7 +507,7 @@ async function renderAchievements(){
     const date=completionDate(rows);groupBadges.push(badge('🏆',`Complete ${sport}`,`Visit every listed ${sport} venue.`,!!date,date));
   });
   ['CFB','CBB'].forEach(sport=>{
-    const rows=STADIUMS.filter(x=>x.sport===sport),confs=[...new Set(rows.map(x=>x.conference))].sort((a,b)=>a.localeCompare(b));
+    const rows=STADIUMS.filter(x=>x.sport===sport&&isCountedVenue(x)),confs=[...new Set(rows.map(x=>x.conference))].sort((a,b)=>a.localeCompare(b));
     confs.forEach(conf=>{const cr=rows.filter(x=>x.conference===conf),date=completionDate(cr);groupBadges.push(badge(sport==='CFB'?'🏈':'🏀',`${conf} Complete`,`Visit every listed ${sport==='CFB'?'football':'basketball'} venue in ${conf}.`,!!date,date));});
     const date=completionDate(rows);groupBadges.push(badge('🏆',sport==='CFB'?'All FBS Stadiums':'All College Basketball Arenas',`Visit every listed ${sport} venue.`,!!date,date));
   });
@@ -585,7 +620,7 @@ function card(x){const e=getEntry(x.id),visitCount=getVisits(x.id).length,date=e
 
 function renderEdits(){
   const sportOptions=trackedSports.map(s=>`<option value="${s}">${s}</option>`).join('');
-  const teamOptions=STADIUMS.filter(isTrackedVenue).sort((a,b)=>a.sport.localeCompare(b.sport)||a.team.localeCompare(b.team)).map(x=>`<option value="${escapeHtml(x.id)}">${escapeHtml(x.sport)} — ${escapeHtml(x.team)}</option>`).join('');
+  const teamOptions=STADIUMS.filter(isTrackedVenue).sort((a,b)=>a.sport.localeCompare(b.sport)||a.team.localeCompare(b.team)).map(x=>`<option value="${escapeHtml(x.id)}">${escapeHtml(x.sport)} — ${escapeHtml(x.team)}${teamVenues(x).length>1?` · ${escapeHtml(x.venue)}${venueStatus(x)!=='current'?` (${venueStatus(x)==='coming'?'coming soon':'former'})`:''}`:''}</option>`).join('');
   $("#content").innerHTML=`<section class="edits-page">
     <div class="edits-hero"><p class="eyebrow">APP CUSTOMIZATION</p><h2>Edits</h2><p>Change team and venue information, or manually add planned games for 2027 and beyond. Changes are saved only to this device and are included in app backups.</p></div>
     <section class="edit-panel"><h3>Edit a team or venue</h3><label>Choose team<select id="editTeamSelect"><option value="">Select a team</option>${teamOptions}</select></label><form id="teamEditForm" class="form-grid" hidden>
@@ -595,6 +630,7 @@ function renderEdits(){
       <label>Capacity<input id="editCapacity"></label><label>Opened<input id="editOpened"></label>
       <div class="full edit-actions"><button type="submit">Save team edits</button><button type="button" id="resetTeamEdit" class="danger-outline">Restore original values</button></div>
     </form></section>
+    <section class="edit-panel"><h3>Team stadiums</h3><p class="small">Add a new or upcoming stadium for a team, or mark one as a former home. Past visits always stay with the stadium where they happened.</p><label>Choose team<select id="stadiumTeamSelect"><option value="">Select a team</option>${STADIUMS.filter(x=>isTrackedVenue(x)&&!x.teamOf).sort((a,b)=>a.sport.localeCompare(b.sport)||a.team.localeCompare(b.team)).map(x=>`<option value="${escapeHtml(x.id)}">${escapeHtml(x.sport)} — ${escapeHtml(x.team)}${teamVenues(x).length>1?` (${teamVenues(x).length} stadiums)`:''}</option>`).join('')}</select></label><div class="edit-actions"><button type="button" id="openStadiumManager">Manage stadiums</button></div></section>
     <section class="edit-panel"><h3>Add a future or manual game</h3><p class="small">This creates a planned game entry. You can return later to add the score, seat, photos, and memories.</p><form id="manualGameForm" class="form-grid">
       <label class="full">Team / venue<select id="manualTeam" required><option value="">Choose team or venue</option>${teamOptions}</select></label>
       <label>Date<input id="manualDate" type="date" required></label><label>Season<input id="manualSeason" type="number" min="1900" max="2100" value="2027" required></label>
@@ -610,6 +646,7 @@ function renderEdits(){
   const select=$("#editTeamSelect"),form=$("#teamEditForm");let selectedId='';
   const fill=()=>{selectedId=select.value;const x=STADIUMS.find(r=>r.id===selectedId);form.hidden=!x;if(!x)return;$("#editTeamName").value=x.team||'';$("#editSport").value=x.sport||'NFL';$("#editConference").value=x.conference||'';$("#editDivision").value=x.division||'';$("#editVenue").value=x.venue||'';$("#editCity").value=x.city||'';$("#editState").value=x.state||'';$("#editCapacity").value=x.capacity||'';$("#editOpened").value=x.opened||'';};
   select.onchange=fill;
+  $("#openStadiumManager").onclick=()=>{const id=$("#stadiumTeamSelect").value;if(!id){alert('Choose a team first.');return;}window.openStadiumManager?.(id,()=>renderEdits());};
   form.onsubmit=e=>{e.preventDefault();const x=STADIUMS.find(r=>r.id===selectedId);if(!x)return;const edit={team:$("#editTeamName").value.trim(),sport:$("#editSport").value,conference:$("#editConference").value.trim(),division:$("#editDivision").value.trim(),venue:$("#editVenue").value.trim(),city:$("#editCity").value.trim(),state:$("#editState").value.trim(),capacity:$("#editCapacity").value.trim(),opened:$("#editOpened").value.trim()};teamEdits[selectedId]=edit;Object.assign(x,edit);saveTeamEdits();alert('Team information saved.');renderEdits();};
   $("#resetTeamEdit").onclick=()=>{if(!selectedId||!confirm('Restore this team to the app’s original information?'))return;delete teamEdits[selectedId];saveTeamEdits();location.reload();};
   const neutral=$("#manualNeutral"),venueWrap=$("#manualVenueWrap");neutral.onchange=()=>venueWrap.hidden=!neutral.checked;
@@ -1021,7 +1058,7 @@ async function openDetail(id,selectedVisitId=""){
     const latestSeasonStart=x.sport==='CBB'?(now.getMonth()>=6?year:year-1):year;
     const seasonYears=Array.from({length:2100-2013+1},(_,i)=>2100-i);
     const seasonOptions=seasonYears.map(y=>{const label=x.sport==='CBB'?`${y}–${String(y+1).slice(-2)}`:String(y);return `<option value="${y}" ${String(visit.season||'')===String(y)?'selected':''}>${label}</option>`;}).join('');
-    const venueOptions=STADIUMS.slice().sort((a,b)=>a.venue.localeCompare(b.venue)||a.city.localeCompare(b.city)).map(v=>`<option value="${escapeHtml(v.id)}" ${(visit.venueId||id)===v.id?'selected':''}>${escapeHtml(v.venue)} — ${escapeHtml(v.city)}${v.state?`, ${escapeHtml(v.state)}`:''}</option>`).join('');
+    const venueOptions=STADIUMS.filter(v=>venueStatus(v)!=='coming').sort((a,b)=>a.venue.localeCompare(b.venue)||a.city.localeCompare(b.city)).map(v=>`<option value="${escapeHtml(v.id)}" ${(visit.venueId||id)===v.id?'selected':''}>${escapeHtml(v.venue)} — ${escapeHtml(v.city)}${v.state?`, ${escapeHtml(v.state)}`:''}</option>`).join('');
     const eventTypes=['Preseason','Regular Season','Wild Card','Divisional Round','Conference Championship','Playoffs','Championship','Super Bowl','Bowl Game','College Football Playoff','Conference Tournament','NCAA Tournament','Play-In Tournament','All-Star Game','Exhibition','International','Other'];
     const eventTypeOptions=eventTypes.map(t=>`<option value="${t}" ${(visit.eventType||'Regular Season')===t?'selected':''}>${t}</option>`).join('');
     $("#detailContent").innerHTML=`<div class="detail-title stadium-profile"><span class="eyebrow" style="color:#2563eb">${x.sport} · ${escapeHtml(x.conference)}${x.division?` · ${escapeHtml(x.division)}`:''}</span><h2>${escapeHtml(x.venue)}</h2><p>📍 ${escapeHtml(x.city)}${x.state?`, ${escapeHtml(x.state)}`:''}<br>Home of the ${escapeHtml(x.team)} · ${visits.length} saved visit${visits.length===1?'':'s'}</p></div>${history}<div class="visit-editor">${visits.length?`<button type="button" id="backToView" class="secondary back-to-view">← ${isNew?'Cancel':'Back to visit page'}</button>`:''}<h3>${isNew?'Add a visit':'Edit visit'}</h3><div id="gameCardPreview">${currentCard}</div><section class="event-location-panel"><div class="event-location-heading"><div><h3>Game location</h3><p>Use neutral site when the team played somewhere other than its home venue.</p></div><label class="neutral-switch"><input id="neutralSite" type="checkbox" ${visit.neutralSite?'checked':''}><span>Neutral site</span></label></div><div class="form-grid game-basics-grid"><label>Game league<select id="gameSport">${gameSportOptions(inferGameSport(visit,x.sport))}</select></label><label>Event type<select id="eventType">${eventTypeOptions}</select></label><label>Event name<input id="eventName" value="${escapeHtml(visit.eventName||'')}" placeholder="e.g. Peach Bowl or Game 7"></label><label>Date<input id="visitDate" type="date" value="${visit.date||''}"></label><label id="neutralVenueLabel" class="full" ${visit.neutralSite?'':'hidden'}>Actual venue<select id="neutralVenue">${venueOptions}</select></label></div><p id="neutralVenueHelp" class="small" ${visit.neutralSite?'':'hidden'}>This visit will count for the selected stadium, not this team’s home stadium.</p><div class="matchup-editor ${visit.neutralSite?'neutral-active':''}" id="matchupEditor"><div class="matchup-column"><span class="matchup-label">Away team</span><label>Team<input id="opponent" value="${escapeHtml(visit.opponent||'')}" placeholder="Away team"></label><label>Mascot<input id="opponentMascot" value="${escapeHtml(visit.opponentMascot||'')}" placeholder="e.g. Bulldogs"></label><label>Final score<input id="opponentScore" type="number" min="0" inputmode="numeric" value="${escapeHtml(visit.opponentScore||'')}"></label></div><div class="matchup-vs">VS</div><div class="matchup-column"><span class="matchup-label">Home / listed team</span><label>Team<input id="teamName" value="${escapeHtml(visit.teamName||x.team)}" placeholder="Home team"></label><label>Mascot<input id="teamMascot" value="${escapeHtml(visit.teamMascot||'')}" placeholder="e.g. Wildcats"></label><label>Final score<input id="teamScore" type="number" min="0" inputmode="numeric" value="${escapeHtml(visit.teamScore||'')}"></label></div></div></section><div class="season-picker-panel"><label>Season<select id="seasonSelect"><option value="">Choose a season</option>${seasonOptions}</select></label><button type="button" id="loadSeasonGames">Load games</button><div id="seasonGamesResults" class="recent-games-results full"></div></div><section class="ticket-scan-section"><div class="ticket-scan-heading"><div><h3>Ticket scan</h3><p>Attach a photo or screenshot of the ticket for this visit.</p></div><label class="file-button ticket-button">🎟 Choose ticket image<input id="ticketInput" type="file" accept="image/*" hidden></label></div><div id="ticketPreview" class="ticket-preview"></div></section><div class="photo-gallery" id="photoGallery">${gallery()}</div><div class="photo-actions"><label class="file-button">Choose photos or videos from library<input id="photoInput" type="file" accept="image/*,video/*" multiple hidden></label><span class="small">Photos and videos belong to this specific visit. Large videos may use significant phone storage.</span></div><div class="form-grid"><label>Section<input id="section" value="${escapeHtml(visit.section||'')}"></label><label>Row<input id="row" value="${escapeHtml(visit.row||'')}"></label><label>Seat<input id="seat" value="${escapeHtml(visit.seat||'')}"></label><label class="full">Favorite memory<textarea id="memory">${escapeHtml(visit.memory||'')}</textarea></label><label class="full">Notes<textarea id="notes">${escapeHtml(visit.notes||'')}</textarea></label></div><div class="visit-actions"><button type="button" id="saveDetail" class="save">Save visit</button>${!isNew?'<button type="button" id="deleteVisit" class="danger-outline">Delete this visit</button>':''}</div></div><p class="small">Photos, videos, and personal details stay on this device unless you export a backup.</p>`;
@@ -1057,12 +1094,12 @@ function resizeImage(file,max,quality){return new Promise((resolve,reject)=>{con
 $("#search").oninput=renderContent; $("#statusFilter").onchange=renderContent;
 $("#backupBtn").onclick=()=>$("#backupDialog").showModal();
 const syncButton=$("#syncBtn");if(syncButton)syncButton.onclick=()=>$("#syncDialog").showModal();
-$("#exportBtn").onclick=async()=>{const btn=$("#exportBtn"),label=btn.textContent;btn.disabled=true;btn.textContent='Preparing backup…';try{const payload={version:4,exported:new Date().toISOString(),state,teamEdits,pageColors:readPageColors(),bucket:window.readBucketList?.()||[],photos:await serializeMediaForExport(await allPhotos())};const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([JSON.stringify(payload)],{type:'application/json'}));a.download=`stadium-passport-backup-${new Date().toISOString().slice(0,10)}.json`;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),60000);recordBackup();}catch(err){console.error(err);alert('The backup could not be created. Please try again.');}finally{btn.disabled=false;btn.textContent=label;}};
+$("#exportBtn").onclick=async()=>{const btn=$("#exportBtn"),label=btn.textContent;btn.disabled=true;btn.textContent='Preparing backup…';try{const payload={version:4,exported:new Date().toISOString(),state,teamEdits,pageColors:readPageColors(),bucket:window.readBucketList?.()||[],venues:venueStore,photos:await serializeMediaForExport(await allPhotos())};const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([JSON.stringify(payload)],{type:'application/json'}));a.download=`stadium-passport-backup-${new Date().toISOString().slice(0,10)}.json`;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),60000);recordBackup();}catch(err){console.error(err);alert('The backup could not be created. Please try again.');}finally{btn.disabled=false;btn.textContent=label;}};
 $("#importFile").onchange=async ev=>{const file=ev.target.files[0];if(!file)return;try{const data=JSON.parse(await file.text());if(!data||typeof data!=='object'||!data.state)throw new Error('Not a Stadium Passport backup');
   if(!confirm('Add the visits from this backup to this device?\n\nNothing already on this device will be deleted or changed. Visits that are already here are kept as they are.')){ev.target.value='';return;}
   safeSetItem('stadiumPassportPreImportSnapshot',JSON.stringify({at:new Date().toISOString(),state,teamEdits}));
   const result=mergeBackupState(data.state);for(const [k,v] of Object.entries(data.teamEdits||{}))if(!(k in teamEdits))teamEdits[k]=v;saveTeamEdits();saveState();
-  if(Array.isArray(data.bucket))window.mergeBucketList?.(data.bucket);
+  if(Array.isArray(data.bucket))window.mergeBucketList?.(data.bucket);mergeVenueStore(data.venues);
   if(data.pageColors&&typeof data.pageColors==='object'){const pc={...data.pageColors,...readPageColors()};safeSetItem('stadiumPassportPageColorsV1',JSON.stringify(pc));}
   for(const [id,p] of Object.entries(data.photos||{})){const incoming=Array.isArray(p)?p:[p];if(!incoming.length)continue;const existing=(await getPhotos(id)).filter(Boolean);if(existing.length)continue;await putPhotos(id,incoming);}
   alert(`Backup imported: ${result.added} visit${result.added===1?'':'s'} added${result.updated?`, ${result.updated} already on this device (kept as is)`:''}. Nothing on this device was removed.`);$("#backupDialog").close();render();}catch(e){console.error(e);alert('That backup file could not be imported.');}finally{ev.target.value='';}};
@@ -1078,7 +1115,7 @@ if('serviceWorker' in navigator&&location.protocol.startsWith('http'))window.add
 
 /* Video playback helper (v32): a tap on a paused video starts it directly, and if the phone can't
    play it, a short message appears on the video instead of a silent black box. */
-const APP_VERSION='v39';
+const APP_VERSION='v40';
 function videoTypeFor(el){const rec=videoObjectUrls.get(el.getAttribute('src'));return rec?guessVideoType(rec):'unknown';}
 function showVideoProblem(el,why){
   const holder=el.parentElement;if(!holder||holder.querySelector('.video-problem'))return;
