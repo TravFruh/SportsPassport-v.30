@@ -53,7 +53,9 @@ function saveVenueStore(){if(safeSetItem(VENUES_KEY,JSON.stringify(venueStore)))
 function syncAddedVenue(v){const base=STADIUMS.find(r=>r.id===v.teamOf);if(base){v.team=base.team;v.sport=base.sport;v.level=base.level;v.conference=base.conference;v.division=base.division;if(v.lat==null||v.lat===''){v.lat=base.lat;v.lng=base.lng;}}return v;}
 function installAddedVenues(){venueStore.added.forEach(v=>{if(!STADIUMS.some(r=>r.id===v.id))STADIUMS.push(syncAddedVenue({...v}));});}
 installAddedVenues();
-function venueStatus(x){return venueStore.status[x?.id]?.status||x?.venueStatus||'current';}
+(function repairVenueStatuses(){let changed=false;STADIUMS.forEach(x=>{if(x.teamOf)return;const st=venueStore.status[x.id]?.status;if(st&&st!=='current'&&!STADIUMS.some(v=>(v.teamOf||v.id)===x.id&&venueStore.status[v.id]?.status==='current'&&v.id!==x.id)){delete venueStore.status[x.id];changed=true;}});if(changed)safeSetItem(VENUES_KEY,JSON.stringify(venueStore));})();
+function storedVenueStatus(x){return venueStore.status[x?.id]?.status||x?.venueStatus||'current';}
+function venueStatus(x){const st=storedVenueStatus(x);if(st!=='current'&&x&&!x.teamOf&&!teamVenues(x).some(v=>storedVenueStatus(v)==='current'))return 'current';return st;}
 function venueYear(x){return venueStore.status[x?.id]?.year||x?.opened||'';}
 const teamKeyOf=x=>x?.teamOf||x?.id;
 function teamVenues(x){const k=teamKeyOf(x);return STADIUMS.filter(r=>teamKeyOf(r)===k);}
@@ -68,11 +70,12 @@ function addTeamVenue(baseId,{venue,city,state,status,year}){
   STADIUMS.push(entry);applyVenueStatus(entry.id,status,year);return entry;
 }
 function applyVenueStatus(id,status,year){
-  const x=STADIUMS.find(r=>r.id===id);if(!x)return;
+  const x=STADIUMS.find(r=>r.id===id);if(!x)return false;
+  if(status!=='current'&&venueStatus(x)==='current'&&!teamVenues(x).some(o=>o.id!==id&&venueStatus(o)==='current'))return false;
   if(status==='current'){teamVenues(x).forEach(o=>{if(o.id!==id&&venueStatus(o)==='current')setVenueStatus(o.id,'former',year||String(new Date().getFullYear()));});}
   setVenueStatus(id,status,year);
   const rec=venueStore.added.find(v=>v.id===id);if(rec&&year)rec.opened=year;
-  saveVenueStore();
+  saveVenueStore();return true;
 }
 function updateTeamVenue(id,{venue,city,state}){const rec=venueStore.added.find(v=>v.id===id),x=STADIUMS.find(r=>r.id===id);if(!rec||!x)return;Object.assign(rec,{venue,city,state});Object.assign(x,{venue,city,state});saveVenueStore();}
 function removeTeamVenue(id){if(getVisits(id).length)return false;venueStore.added=venueStore.added.filter(v=>v.id!==id);delete venueStore.status[id];const i=STADIUMS.findIndex(r=>r.id===id);if(i>=0)STADIUMS.splice(i,1);saveVenueStore();return true;}
@@ -1115,7 +1118,7 @@ if('serviceWorker' in navigator&&location.protocol.startsWith('http'))window.add
 
 /* Video playback helper (v32): a tap on a paused video starts it directly, and if the phone can't
    play it, a short message appears on the video instead of a silent black box. */
-const APP_VERSION='v40';
+const APP_VERSION='v41';
 function videoTypeFor(el){const rec=videoObjectUrls.get(el.getAttribute('src'));return rec?guessVideoType(rec):'unknown';}
 function showVideoProblem(el,why){
   const holder=el.parentElement;if(!holder||holder.querySelector('.video-problem'))return;

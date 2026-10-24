@@ -174,14 +174,15 @@
     const draw=(msg='')=>{
       closeSheet();const list=venuesOf(base).slice();
       const el=document.createElement('div');el.id='lvSheet';el.className='lv-sheet-wrap';
-      const stBtn=(v,k,l)=>`<button type="button" class="${statusOf(v)===k?'on':''}" data-st="${k}" data-id="${e(v.id)}">${l}</button>`;
+      const onlyCurrent=v=>statusOf(v)==='current'&&!list.some(o=>o.id!==v.id&&statusOf(o)==='current');
+      const stBtn=(v,k,l)=>{const lock=onlyCurrent(v)&&k!=='current';return `<button type="button" class="${statusOf(v)===k?'on':''}" data-st="${k}" data-id="${e(v.id)}" ${lock?'disabled aria-disabled="true"':''}>${l}</button>`;};
       el.innerHTML=`<div class="lv-backdrop" data-lv-close></div><div class="lv-sheet" role="dialog" aria-modal="true" aria-label="Manage stadiums"><span class="lv-grab" aria-hidden="true"></span>
         <div class="lv-sheet-head">${logo(base,56,{on:true})}<div><h3>${e(base.team)}</h3><span>Stadiums</span></div><button type="button" class="lv-x" data-lv-close aria-label="Close"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
         ${msg?`<div class="lv-note gold">${e(msg)}</div>`:''}
         ${list.map(v=>{const c=vis(v).length;return `<div class="lv-mg-venue"><div class="lv-mg-top"><strong>${e(v.venue)}</strong><small>${e(v.city)}${v.state?`, ${e(v.state)}`:''} · ${c} visit${c===1?'':'s'}${yearOf(v)?` · ${statusOf(v)==='former'?'closed':'opens/opened'} ${e(yearOf(v))}`:''}</small></div>
-          <div class="lv-seg" role="group" aria-label="Status for ${e(v.venue)}">${stBtn(v,'current','Current')}${stBtn(v,'coming','Coming soon')}${stBtn(v,'former','Former')}</div>
+          <span class="lv-mg-label">Status</span><div class="lv-seg" role="group" aria-label="Status for ${e(v.venue)}">${stBtn(v,'current','Current')}${stBtn(v,'coming','Coming soon')}${stBtn(v,'former','Former')}</div>${onlyCurrent(v)?`<small class="lv-mg-lock">This is the team’s current stadium. To replace it, add the new stadium below, or mark another stadium Current.</small>`:''}
           ${v.teamOf?`<div class="lv-mg-actions"><button type="button" data-edit="${e(v.id)}">Edit name</button>${c?'':`<button type="button" class="danger" data-del="${e(v.id)}">Remove</button>`}</div>`:''}</div>`;}).join('')}
-        <form class="lv-mg-form" id="lvAddVenue"><strong>Add a stadium</strong>
+        <form class="lv-mg-form" id="lvAddVenue"><strong>Add a new stadium</strong><p class="lv-mg-help">Use this for a stadium that’s being built or that the team used before.</p>
           <label>Stadium name<input name="venue" required placeholder="New stadium name"></label>
           <div class="lv-mg-row"><label>City<input name="city" value="${e(base.city)}"></label><label>State<input name="state" value="${e(base.state)}" maxlength="3"></label></div>
           <div class="lv-mg-row"><label>Status<select name="status"><option value="coming">Coming soon</option><option value="current">Current</option><option value="former">Former</option></select></label><label>Year<input name="year" inputmode="numeric" placeholder="Opening or closing year" maxlength="4"></label></div>
@@ -192,7 +193,7 @@
       el.querySelectorAll('[data-lv-close]').forEach(b=>b.onclick=done);
       el.querySelectorAll('[data-st]').forEach(b=>b.onclick=()=>{const v=STADIUMS.find(r=>r.id===b.dataset.id);let y=yearOf(v);
         if(b.dataset.st!==statusOf(v)){const ask=b.dataset.st==='former'?'Year it closed (optional):':b.dataset.st==='coming'?'Expected opening year (optional):':'Year it opened (optional):';const ans=prompt(ask,y||'');if(ans===null)return;y=ans.trim();}
-        applyVenueStatus(b.dataset.id,b.dataset.st,y);draw(b.dataset.st==='current'?'Saved. Any other current stadium is now marked Former.':'Saved.');});
+        const ok=applyVenueStatus(b.dataset.id,b.dataset.st,y);draw(!ok?'Every team needs one current stadium. Mark another stadium Current first.':b.dataset.st==='current'?'Saved. Any other current stadium is now marked Former.':'Saved.');});
       el.querySelectorAll('[data-edit]').forEach(b=>b.onclick=()=>{const v=STADIUMS.find(r=>r.id===b.dataset.edit);const name=prompt('Stadium name',v.venue);if(!name)return;const city=prompt('City',v.city)??v.city;const st=prompt('State',v.state)??v.state;updateTeamVenue(v.id,{venue:name.trim(),city:city.trim(),state:st.trim()});draw('Saved.');});
       el.querySelectorAll('[data-del]').forEach(b=>b.onclick=()=>{if(!confirm('Remove this stadium? It has no visits, so nothing else changes.'))return;removeTeamVenue(b.dataset.del);draw('Removed.');});
       el.querySelector('#lvAddVenue').onsubmit=ev=>{ev.preventDefault();const f=new FormData(ev.target);const venue=String(f.get('venue')||'').trim();if(!venue)return;
