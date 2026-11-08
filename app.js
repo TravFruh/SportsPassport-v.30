@@ -1,4 +1,4 @@
-const sports = ["OVERVIEW","NFL","CFB","MLB","CBB","CHECKLIST","SCRATCH MAP","PASSPORT","EDITS","PERSONAL RECORDS","ACHIEVEMENTS"];
+const sports = ["OVERVIEW","NFL","CFB","MLB","CBB","NOTES","CHECKLIST","SCRATCH MAP","PASSPORT","EDITS","PERSONAL RECORDS","ACHIEVEMENTS"];
 const trackedSports = ["NFL","CFB","MLB","CBB"];
 /* NBA is no longer tracked (v34). NBA arenas stay in the venue list so college basketball games
    played there can still be logged as neutral-site games; NBA teams no longer appear as teams. */
@@ -229,12 +229,12 @@ async function getPhotos(id){
 async function allPhotos(){const db=await dbPromise;return new Promise((res,rej)=>{const out={};const store=db.transaction("photos").objectStore("photos");const req=store.openCursor();req.onsuccess=e=>{const c=e.target.result;if(c){out[c.key]=c.value;c.continue()}else res(out)};req.onerror=()=>rej(req.error);});}
 
 function renderTabs(){
-  $("#tabs").innerHTML=sports.map(s=>`<button class="${s===activeSport?'active':''}" data-sport="${s}">${s==='OVERVIEW'?'Overview':s==='CHECKLIST'?'Checklist':s==='SCRATCH MAP'?'Scratch Map':s==='PASSPORT'?'Passport':s==='PERSONAL RECORDS'?'Personal Records':s==='ACHIEVEMENTS'?'Achievements':s==='EDITS'?'Edits':s}</button>`).join("");
+  $("#tabs").innerHTML=sports.map(s=>`<button class="${s===activeSport?'active':''}" data-sport="${s}">${s==='OVERVIEW'?'Overview':s==='CHECKLIST'?'Checklist':s==='SCRATCH MAP'?'Scratch Map':s==='PASSPORT'?'Passport':s==='PERSONAL RECORDS'?'Personal Records':s==='ACHIEVEMENTS'?'Achievements':s==='EDITS'?'Edits':s==='NOTES'?'Notes':s}</button>`).join("");
   $("#tabs").querySelectorAll("button").forEach(b=>b.onclick=()=>{activeSport=b.dataset.sport;if(trackedSports.includes(activeSport))lastLeagueSport=activeSport;render();});
 }
 function renderMobileNav(){
   const nav=$("#mobileBottomNav");if(!nav)return;
-  const section=activeSport==='OVERVIEW'?'overview':trackedSports.includes(activeSport)?'leagues':activeSport==='SCRATCH MAP'?'map':activeSport==='PASSPORT'?'passport':activeSport==='EDITS'?'edits':'';
+  const section=activeSport==='OVERVIEW'?'overview':trackedSports.includes(activeSport)?'leagues':activeSport==='SCRATCH MAP'?'map':activeSport==='PASSPORT'?'passport':activeSport==='EDITS'?'edits':activeSport==='NOTES'?'notes':'';
   nav.querySelectorAll('button').forEach(btn=>btn.classList.toggle('active',btn.dataset.mobileAction===section));
 }
 function bindMobileNav(){
@@ -246,6 +246,7 @@ function bindMobileNav(){
     else if(action==='map')activeSport='SCRATCH MAP';
     else if(action==='passport')activeSport='PASSPORT';
     else if(action==='edits')activeSport='EDITS';
+    else if(action==='notes')activeSport='NOTES';
     else if(action==='add'){openAddVisit();return;}
     render();window.scrollTo({top:0,behavior:'smooth'});
   });
@@ -657,7 +658,7 @@ function renderEdits(){
   $("#manualGameForm").onsubmit=e=>{e.preventDefault();const sourceId=$("#manualTeam").value,source=STADIUMS.find(r=>r.id===sourceId);if(!source)return;const targetId=neutral.checked?($("#manualVenue").value||sourceId):sourceId;const visit={...emptyVisit(),id:newVisitId(),date:$("#manualDate").value,season:String($("#manualSeason").value),gameSport:$("#manualSport").value,opponent:$("#manualOpponent").value.trim(),teamName:source.team,eventName:$("#manualEventName").value.trim(),eventType:$("#manualEventType").value,neutralSite:neutral.checked,venueId:targetId};const list=getVisits(targetId);list.push(visit);state[targetId]={visits:list};saveState();$("#manualGameStatus").textContent=`Added ${visit.opponent} at ${source.team} on ${formatDate(visit.date)}.`;e.target.reset();$("#manualSeason").value='2027';venueWrap.hidden=true;};
 }
 
-async function render(){if($("#controls"))$("#controls").hidden=activeSport==="OVERVIEW"||activeSport==="SCRATCH MAP"||activeSport==="PASSPORT"||activeSport==="PERSONAL RECORDS"||activeSport==="ACHIEVEMENTS"||activeSport==="EDITS";if(currentMap){currentMap.remove();currentMap=null;}document.body.classList.toggle("overview-mode",activeSport==="OVERVIEW");if(trackedSports.includes(activeSport))lastLeagueSport=activeSport;if(activeSport!=="PASSPORT")window.leavePassportBook?.();if(!trackedSports.includes(activeSport))window.leaveLeaguesV2?.();renderTabs();renderMobileNav();renderSummary();if(activeSport==="OVERVIEW")await renderOverview();else if(activeSport==="CHECKLIST")renderChecklist();else if(activeSport==="SCRATCH MAP")await renderScratchMap();else if(activeSport==="PASSPORT"){if(window.renderPassportBook)window.renderPassportBook($("#content"));else await renderPassport();}else if(activeSport==="PERSONAL RECORDS")await renderPersonalRecords();else if(activeSport==="ACHIEVEMENTS")await renderAchievements();else if(activeSport==="EDITS")renderEdits();else if(window.renderLeaguesV2&&trackedSports.includes(activeSport)){if($("#controls"))$("#controls").hidden=true;window.renderLeaguesV2($("#content"));}else renderContent();}
+async function render(){if($("#controls"))$("#controls").hidden=activeSport==="OVERVIEW"||activeSport==="SCRATCH MAP"||activeSport==="PASSPORT"||activeSport==="PERSONAL RECORDS"||activeSport==="ACHIEVEMENTS"||activeSport==="EDITS";if(currentMap){currentMap.remove();currentMap=null;}document.body.classList.toggle("overview-mode",activeSport==="OVERVIEW");if(trackedSports.includes(activeSport))lastLeagueSport=activeSport;if(activeSport!=="PASSPORT")window.leavePassportBook?.();if(activeSport!=="NOTES")window.leaveNotes?.();if(!trackedSports.includes(activeSport))window.leaveLeaguesV2?.();renderTabs();renderMobileNav();renderSummary();if(activeSport==="OVERVIEW")await renderOverview();else if(activeSport==="CHECKLIST")renderChecklist();else if(activeSport==="SCRATCH MAP")await renderScratchMap();else if(activeSport==="PASSPORT"){if(window.renderPassportBook)window.renderPassportBook($("#content"));else await renderPassport();}else if(activeSport==="PERSONAL RECORDS")await renderPersonalRecords();else if(activeSport==="ACHIEVEMENTS")await renderAchievements();else if(activeSport==="EDITS")renderEdits();else if(activeSport==="NOTES"&&window.renderNotes){if($("#controls"))$("#controls").hidden=true;window.renderNotes($("#content"));}else if(window.renderLeaguesV2&&trackedSports.includes(activeSport)){if($("#controls"))$("#controls").hidden=true;window.renderLeaguesV2($("#content"));}else renderContent();}
 
 
 
@@ -1097,12 +1098,12 @@ function resizeImage(file,max,quality){return new Promise((resolve,reject)=>{con
 $("#search").oninput=renderContent; $("#statusFilter").onchange=renderContent;
 $("#backupBtn").onclick=()=>$("#backupDialog").showModal();
 const syncButton=$("#syncBtn");if(syncButton)syncButton.onclick=()=>$("#syncDialog").showModal();
-$("#exportBtn").onclick=async()=>{const btn=$("#exportBtn"),label=btn.textContent;btn.disabled=true;btn.textContent='Preparing backup…';try{const payload={version:4,exported:new Date().toISOString(),state,teamEdits,pageColors:readPageColors(),bucket:window.readBucketList?.()||[],venues:venueStore,photos:await serializeMediaForExport(await allPhotos())};const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([JSON.stringify(payload)],{type:'application/json'}));a.download=`stadium-passport-backup-${new Date().toISOString().slice(0,10)}.json`;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),60000);recordBackup();}catch(err){console.error(err);alert('The backup could not be created. Please try again.');}finally{btn.disabled=false;btn.textContent=label;}};
+$("#exportBtn").onclick=async()=>{const btn=$("#exportBtn"),label=btn.textContent;btn.disabled=true;btn.textContent='Preparing backup…';try{const payload={version:4,exported:new Date().toISOString(),state,teamEdits,pageColors:readPageColors(),bucket:window.readBucketList?.()||[],notes:window.readNotes?.()||[],venues:venueStore,photos:await serializeMediaForExport(await allPhotos())};const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([JSON.stringify(payload)],{type:'application/json'}));a.download=`stadium-passport-backup-${new Date().toISOString().slice(0,10)}.json`;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),60000);recordBackup();}catch(err){console.error(err);alert('The backup could not be created. Please try again.');}finally{btn.disabled=false;btn.textContent=label;}};
 $("#importFile").onchange=async ev=>{const file=ev.target.files[0];if(!file)return;try{const data=JSON.parse(await file.text());if(!data||typeof data!=='object'||!data.state)throw new Error('Not a Stadium Passport backup');
   if(!confirm('Add the visits from this backup to this device?\n\nNothing already on this device will be deleted or changed. Visits that are already here are kept as they are.')){ev.target.value='';return;}
   safeSetItem('stadiumPassportPreImportSnapshot',JSON.stringify({at:new Date().toISOString(),state,teamEdits}));
   const result=mergeBackupState(data.state);for(const [k,v] of Object.entries(data.teamEdits||{}))if(!(k in teamEdits))teamEdits[k]=v;saveTeamEdits();saveState();
-  if(Array.isArray(data.bucket))window.mergeBucketList?.(data.bucket);mergeVenueStore(data.venues);
+  if(Array.isArray(data.bucket))window.mergeBucketList?.(data.bucket);if(Array.isArray(data.notes))window.mergeNotes?.(data.notes);mergeVenueStore(data.venues);
   if(data.pageColors&&typeof data.pageColors==='object'){const pc={...data.pageColors,...readPageColors()};safeSetItem('stadiumPassportPageColorsV1',JSON.stringify(pc));}
   for(const [id,p] of Object.entries(data.photos||{})){const incoming=Array.isArray(p)?p:[p];if(!incoming.length)continue;const existing=(await getPhotos(id)).filter(Boolean);if(existing.length)continue;await putPhotos(id,incoming);}
   alert(`Backup imported: ${result.added} visit${result.added===1?'':'s'} added${result.updated?`, ${result.updated} already on this device (kept as is)`:''}. Nothing on this device was removed.`);$("#backupDialog").close();render();}catch(e){console.error(e);alert('That backup file could not be imported.');}finally{ev.target.value='';}};
@@ -1118,7 +1119,7 @@ if('serviceWorker' in navigator&&location.protocol.startsWith('http'))window.add
 
 /* Video playback helper (v32): a tap on a paused video starts it directly, and if the phone can't
    play it, a short message appears on the video instead of a silent black box. */
-const APP_VERSION='v41';
+const APP_VERSION='v42';
 function videoTypeFor(el){const rec=videoObjectUrls.get(el.getAttribute('src'));return rec?guessVideoType(rec):'unknown';}
 function showVideoProblem(el,why){
   const holder=el.parentElement;if(!holder||holder.querySelector('.video-problem'))return;
