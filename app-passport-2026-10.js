@@ -65,7 +65,7 @@
     return pool[(pageSeed+indexOnPage)%pool.length];
   }
   function stampData(x){
-    const vs=visitsOf(x).slice().sort(byDate),first=vs[0]||{},dp=dparts(first.date);
+    const vs=homeVis(x).slice().sort(byDate),first=vs[0]||{},dp=dparts(first.date);
     const has=first.teamScore!==''&&first.teamScore!=null&&first.opponentScore!==''&&first.opponentScore!=null;
     const abbr=n=>{const w=String(n||'').replace(/[^A-Za-z ]/g,'').split(/\s+/).filter(Boolean);return (w.length>1?w.slice(-1)[0]:w[0]||'').slice(0,4).toUpperCase();};
     const seat=[first.section,first.row,first.seat].filter(v=>String(v||'').trim()).join('·');
@@ -88,7 +88,8 @@
     if(sport==='NFL'||sport==='MLB')return pages;
     return pages.sort((a,b)=>a.name.localeCompare(b.name));
   }
-  const isVisited=x=>visitsOf(x).length>0;
+  const homeVis=x=>typeof homeGameVisits==='function'?homeGameVisits(x):visitsOf(x);
+  const isVisited=x=>homeVis(x).length>0;
   const isMain=x=>typeof venueStatus!=='function'||venueStatus(x)==='current';
   const isSecond=x=>typeof venueStatus==='function'&&venueStatus(x)==='second';
   const teamDone=x=>typeof isHomeVisited==='function'?isHomeVisited(x):isVisited(x);
@@ -120,7 +121,7 @@
   const lockIcon='<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 018 0v4"/></svg>';
   function rot(x){return ((hash(x.id+'r')%17)-8);}
   function slotHtml(x,i,seed){
-    if(!isVisited(x))return `<button type="button" class="sp-slot locked" data-sp-open="${e(x.id)}" aria-label="${e(x.team)}, ${e(x.venue)}, locked"><span class="sp-stamp">${genericStamp(LEAGUES[x.sport].shape,'',0,0,0,{locked:true})}<span class="sp-lock">${lockIcon}</span></span><strong>${e(x.team)}</strong><small>${e(x.venue)}${isSecond(x)?' · second home':''}</small></button>`;
+    if(!isVisited(x))return `<button type="button" class="sp-slot locked" data-sp-open="${e(x.id)}" aria-label="${e(x.team)}, ${e(x.venue)}, locked"><span class="sp-stamp">${genericStamp(LEAGUES[x.sport].shape,'',0,0,0,{locked:true})}<span class="sp-lock">${lockIcon}</span></span><strong>${e(x.team)}</strong><small>${e(x.venue)}${isSecond(x)?' · second home':''}${visitsOf(x).length?' · neutral game seen here':''}</small></button>`;
     const d=stampData(x),tier=tierFor(d.count),style=styleFor(x,i,seed);
     return `<button type="button" class="sp-slot" data-sp-open="${e(x.id)}" aria-label="${e(x.team)} stamp, ${e(tier.label)}"><span class="sp-stamp" style="transform:rotate(${rot(x)}deg)">${venueStamp(style,d)}${tier.key!=='bronze'?`<span class="sp-tier ${tier.key}" title="${tier.label}">${tier.key==='legend'?'★':tier.label[0]}</span>`:''}</span><strong>${e(x.team)}</strong><small>${isSecond(x)?`${e(x.venue)} · second home`:`${tier.label} · ${d.count} visit${d.count===1?'':'s'}`}</small></button>`;
   }

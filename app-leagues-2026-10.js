@@ -14,7 +14,8 @@
   const yearOf=x=>typeof venueYear==='function'?venueYear(x):'';
   const venuesOf=x=>typeof teamVenues==='function'?teamVenues(x):[x];
   const visited=x=>typeof isHomeVisited==='function'?isHomeVisited(x):vis(x).length>0;
-  const homeCount=x=>(typeof homeVenues==='function'&&statusOf(x)==='current'?homeVenues(x):[x]).reduce((n,v)=>n+vis(v).length,0);
+  const homeVis=x=>typeof homeGameVisits==='function'?homeGameVisits(x):vis(x);
+  const homeCount=x=>(typeof homeVenues==='function'&&statusOf(x)==='current'?homeVenues(x):[x]).reduce((n,v)=>n+homeVis(v).length,0);
   const norm=s=>typeof normalizeTeamName==='function'?normalizeTeamName(s):String(s||'').toLowerCase();
 
   /* ---------- bucket list ---------- */
@@ -126,20 +127,39 @@
 
   /* ---------- team sheet ---------- */
   function closeSheet(){document.getElementById('lvSheet')?.remove();document.documentElement.classList.remove('lv-sheet-open');}
-  function openSheet(id,root){
+  function openVisitOptions(team,visitId,venueId,root){
+    const venue=STADIUMS.find(r=>r.id===venueId);const v=vis(venue).find(r=>r.id===visitId);if(!venue||!v)return;
+    closeSheet();
+    const others=venuesOf(team).filter(o=>o.id!==venueId&&statusOf(o)!=='coming');
+    const homeGame=typeof isHomeGameAt==='function'?isHomeGameAt(v,venue):true;
+    const label={current:'main home',second:'second home',former:'former home'};
+    const el=document.createElement('div');el.id='lvSheet';el.className='lv-sheet-wrap';
+    el.innerHTML=`<div class="lv-backdrop" data-lv-close></div><div class="lv-sheet" role="dialog" aria-modal="true" aria-label="Visit options"><span class="lv-grab" aria-hidden="true"></span>
+      <div class="lv-sheet-head"><div><h3>${e(v.opponent||'Visit')} · ${e(v.date?new Date(v.date+'T12:00:00').toLocaleDateString(undefined,{month:'short',day:'numeric',year:'numeric'}):'No date')}</h3><span>Logged at ${e(venue.venue)}</span></div><button type="button" class="lv-x" data-lv-close aria-label="Close"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
+      ${others.length?`<div class="lv-sheet-sec"><div class="lv-sec-head"><span>I SAW THIS GAME AT…</span></div>${others.map(o=>`<button type="button" class="lv-opt" data-move="${e(o.id)}"><strong>${e(o.venue)}</strong><small>${e(o.city)}${o.state?`, ${e(o.state)}`:''} · ${label[statusOf(o)]||''}</small></button>`).join('')}</div>`:''}
+      <div class="lv-sheet-sec"><div class="lv-sec-head"><span>WHOSE GAME WAS IT?</span></div>
+        <button type="button" class="lv-opt ${homeGame?'on':''}" data-neutral="0"><strong>A ${e(team.team)} home game</strong><small>Counts toward checking off ${e(team.team)}</small></button>
+        <button type="button" class="lv-opt ${homeGame?'':'on'}" data-neutral="1"><strong>Neutral site / another team’s game</strong><small>Keeps the visit, but it won’t check off ${e(team.team)}</small></button></div>
+      <p class="lv-hint">Photos, ticket and notes stay with the visit.</p></div>`;
+    document.body.appendChild(el);document.documentElement.classList.add('lv-sheet-open');
+    el.querySelectorAll('[data-lv-close]').forEach(b=>b.onclick=()=>openSheet(team.id,root));
+    el.querySelectorAll('[data-move]').forEach(b=>b.onclick=async()=>{b.disabled=true;const ok=await moveVisitToVenue(venueId,visitId,b.dataset.move);if(typeof render==='function')render();openSheet(team.id,root,ok?'Visit moved.':'Couldn’t move that visit.');});
+    el.querySelectorAll('[data-neutral]').forEach(b=>b.onclick=()=>{const ok=setVisitNeutral(venueId,visitId,b.dataset.neutral==='1');if(typeof render==='function')render();openSheet(team.id,root,ok?'Saved.':'Couldn’t save.');});
+  }
+  function openSheet(id,root,flash=''){
     closeSheet();const x=STADIUMS.find(r=>r.id===id);if(!x)return;
     const allV=venuesOf(x),cur=allV.find(v=>statusOf(v)==='current')||x;
     const order={current:0,second:1,coming:2,former:3};const venues=allV.slice().sort((a,b)=>order[statusOf(a)]-order[statusOf(b)]);
     const multi=venues.length>1;
-    const vs=venues.flatMap(v=>vis(v).map(vv=>({...vv,__venue:v}))).sort((a,b)=>(b.date||'').localeCompare(a.date||''));const n=vs.length,nCur=vis(cur).length,nHome=homeCount(cur);
+    const vs=venues.flatMap(v=>vis(v).map(vv=>({...vv,__venue:v}))).sort((a,b)=>(b.date||'').localeCompare(a.date||''));const n=vs.length,nCur=homeVis(cur).length,nHome=homeCount(cur);
     const sportOf=v=>typeof inferGameSport==='function'?inferGameSport(v,x.sport):x.sport;
     const lockI='<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 018 0v4"/></svg>';
     const badge={current:['MAIN HOME','#dcfce7','#166534'],second:['SECOND HOME','#e0f2fe','#075985'],coming:['COMING SOON','#fef3c7','#92400e'],former:['FORMER HOME','#fee2e2','#991b1b']};
-    const venueCards=multi?`<div class="lv-sheet-sec"><div class="lv-sec-head"><span>STADIUMS</span><small>${venues.length}</small></div>${venues.map(v=>{const st=statusOf(v),[lab,bg,fg]=badge[st],c=vis(v).length,y=yearOf(v);
+    const venueCards=multi?`<div class="lv-sheet-sec"><div class="lv-sec-head"><span>STADIUMS</span><small>${venues.length}</small></div>${venues.map(v=>{const st=statusOf(v),[lab,bg,fg]=badge[st],c=homeVis(v).length,y=yearOf(v);
       const meta=st==='coming'?`Expected to open ${y||'[year]'} · doesn’t count yet`:st==='former'?(c?`Retired stamp · ${c} visit${c===1?'':'s'}`:'Closed · log past visits here'):(st==='second'?(c?`Stamped · ${c} visit${c===1?'':'s'}`:'Home games here count too · own stamp to unlock'):(c?`Stamped · ${c} visit${c===1?'':'s'}`:'Not visited yet · stamp to unlock'));
       return `<div class="lv-venue"><span class="lv-venue-stamp ${c?'on':''} ${st}" style="--ring:${teamColor(x)}">${c?(st==='former'?'<i>RETIRED</i>':'<b>✓</b>'):lockI}</span><span class="lv-venue-text"><em style="background:${bg};color:${fg}">${lab}${st==='former'&&y?` · CLOSED ${e(y)}`:st==='current'&&y?` · OPENED ${e(y)}`:''}</em><strong>${e(v.venue)}</strong><small>${e(v.city)}${v.state?`, ${e(v.state)}`:''}</small><small class="meta">${meta}</small></span>${st==='current'||st==='second'?`<button type="button" class="lv-venue-add" data-lv-addat="${e(v.id)}" aria-label="Log a game at ${e(v.venue)}">+ Log</button>`:''}</div>`;}).join('')}</div>`:'';
     const anyFormerVisit=venues.some(v=>statusOf(v)==='former'&&vis(v).length);
-    const homeNames=venues.filter(v=>['current','second'].includes(statusOf(v))&&vis(v).length).map(v=>v.venue);
+    const homeNames=venues.filter(v=>['current','second'].includes(statusOf(v))&&homeVis(v).length).map(v=>v.venue);
     const note=multi?(nHome?`<div class="lv-note blue"><strong>How it counts:</strong> ${e(x.team)} ${/[^']s$/i.test(x.team)?'are':'is'} checked off — you’ve seen a home game at ${e(homeNames.join(' and '))}.${venues.some(v=>statusOf(v)==='second')?' Each home stadium also earns its own stamp.':''}</div>`:anyFormerVisit?`<div class="lv-note gold"><strong>${e(cur.sport)} progress:</strong> visit ${e(cur.venue)} to check the ${e(x.team)} off again. Your earlier visits stay saved as Retired stamps.</div>`:''):'';
     const shared=typeof STADIUMS!=='undefined'?STADIUMS.filter(o=>counted(o)&&(o.teamOf||o.id)!==(cur.teamOf||cur.id)&&norm(o.venue)===norm(cur.venue)&&norm(o.city)===norm(cur.city)):[];
     const sharedHtml=shared.length?`<div class="lv-sheet-sec"><div class="lv-sec-head"><span>SHARED STADIUM</span><small>${e(cur.venue)}</small></div>${shared.map(o=>`<button type="button" class="lv-row lv-shared" data-lv-goto="${e(o.id)}">${logo(o,40)}<span class="lv-row-text"><strong>${e(o.team)}</strong><small>${visited(o)?`${vis(o).length} game${vis(o).length===1?'':'s'} seen here`:'Also plays here · not checked off yet'}</small></span>${chevR}</button>`).join('')}</div>`:'';
@@ -147,14 +167,15 @@
       const has=v.teamScore!==''&&v.teamScore!=null&&v.opponentScore!==''&&v.opponentScore!=null;const out=(typeof visitOutcome==='function'?visitOutcome(v):v.outcome)||'';
       const seat=[v.section&&`Sec ${v.section}`,v.row&&`Row ${v.row}`,v.seat&&`Seat ${v.seat}`].filter(Boolean).join(' · ');
       const memo=String(v.memory||'').trim();
-      return `<button type="button" class="lv-visit" data-lv-visit="${e(v.id)}" data-lv-vvenue="${e(v.__venue.id)}"><span class="lv-visit-date"><b>${d?String(d.getDate()).padStart(2,'0'):'—'}</b><small>${d?`${MON[d.getMonth()]} ${d.getFullYear()}`:'NO DATE'}</small></span><span class="lv-visit-text"><strong>${e(away)} ${v.neutralSite?'vs.':'@'} ${e(home)}</strong>${seat?`<small>${e(seat)}</small>`:''}${memo?`<small class="memo">“${e(memo.length>70?memo.slice(0,68)+'…':memo)}”</small>`:''}${sportOf(v)!==x.sport?`<small>${e(sportOf(v))} game</small>`:''}${multi?`<small class="lv-at">${e(v.__venue.venue)}${statusOf(v.__venue)==='former'?' · former home':''}</small>`:''}</span><span class="lv-visit-score">${has?`<b>${e(v.opponentScore)}–${e(v.teamScore)}</b>`:''}${has&&out&&out!=='FINAL'?`<em class="res ${e(out.toLowerCase())}">${e(out)}</em>`:''}</span></button>`;}).join('');
+      const homeGame=typeof isHomeGameAt==='function'?isHomeGameAt(v,v.__venue):true;
+      return `<div class="lv-visit-wrap"><button type="button" class="lv-visit" data-lv-visit="${e(v.id)}" data-lv-vvenue="${e(v.__venue.id)}"><span class="lv-visit-date"><b>${d?String(d.getDate()).padStart(2,'0'):'—'}</b><small>${d?`${MON[d.getMonth()]} ${d.getFullYear()}`:'NO DATE'}</small></span><span class="lv-visit-text"><strong>${e(away)} ${v.neutralSite?'vs.':'@'} ${e(home)}</strong>${seat?`<small>${e(seat)}</small>`:''}${memo?`<small class="memo">“${e(memo.length>70?memo.slice(0,68)+'…':memo)}”</small>`:''}${sportOf(v)!==x.sport?`<small>${e(sportOf(v))} game</small>`:''}${multi?`<small class="lv-at">${e(v.__venue.venue)}${statusOf(v.__venue)==='former'?' · former home':''}</small>`:''}${homeGame?'':`<small class="lv-nothome">${v.neutralSite?'Neutral-site game':'Not a home game'} · doesn’t count for ${e(x.team)}</small>`}</span><span class="lv-visit-score">${has?`<b>${e(v.opponentScore)}–${e(v.teamScore)}</b>`:''}${has&&out&&out!=='FINAL'?`<em class="res ${e(out.toLowerCase())}">${e(out)}</em>`:''}</span></button><button type="button" class="lv-visit-more" data-lv-more="${e(v.id)}" data-lv-vvenue="${e(v.__venue.id)}" aria-label="Options for this visit">⋯</button></div>`;}).join('');
     const starred=inBucket(x.id);
     const el=document.createElement('div');el.id='lvSheet';el.className='lv-sheet-wrap';
     el.innerHTML=`<div class="lv-backdrop" data-lv-close></div><div class="lv-sheet" role="dialog" aria-modal="true" aria-label="${e(x.team)}"><span class="lv-grab" aria-hidden="true"></span>
       <div class="lv-sheet-head">${logo(x,72,{on:true})}<div><h3>${e(x.team)}</h3><span>${e(cur.venue)} · ${e(cur.city)}${cur.state?`, ${e(cur.state)}`:''}</span><small>${e(x.sport)} · ${e(x.conference||'')}${x.division&&(x.sport==='NFL'||x.sport==='MLB')?` ${e(x.division)}`:''}</small></div>
         <button type="button" class="lv-star ${starred?'on':''}" id="lvStar" aria-pressed="${starred}" aria-label="${starred?'Remove from':'Add to'} bucket list">${starSvg(starred)}</button><button type="button" class="lv-x" data-lv-close aria-label="Close"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
       ${n?`<div class="lv-stats"><div><b>${n}</b><small>Visit${n===1?'':'s'}${multi?' (all stadiums)':''}</small></div><div><b>${nCur?e(tierLabel(nCur)):'—'}</b><small>${multi?'Main stadium stamp':'Passport stamp'}</small></div></div>`:''}
-      ${venueCards}${note}${sharedHtml}
+      ${flash?`<div class="lv-note gold">${e(flash)}</div>`:''}${venueCards}${note}${sharedHtml}
       ${n?`<div class="lv-sheet-sec"><div class="lv-sec-head"><span>YOUR VISITS</span><small>${multi?'By date, all stadiums':'Newest first'}</small></div>${rowsHtml}</div>`:
       `<div class="lv-waiting"><strong>Your stamp is waiting</strong><span>Log a game here to unlock this stadium’s passport stamp.${starred?'':' Tap the star to add it to your bucket list.'}</span></div>`}
       <div class="lv-actions"><button type="button" class="primary" id="lvAddVisit">+ Add a visit</button>${n?'<button type="button" id="lvStamp">See passport stamp</button>':'<button type="button" id="lvNext">Next home game</button>'}</div>
@@ -164,6 +185,7 @@
     el.querySelector('#lvStar').onclick=()=>{toggleBucket(x.id);openSheet(id,root);window.renderLeaguesV2(root);};
     el.querySelectorAll('[data-lv-visit]').forEach(b=>b.onclick=()=>{closeSheet();openDetail(b.dataset.lvVvenue||x.id,b.dataset.lvVisit);});
     el.querySelectorAll('[data-lv-goto]').forEach(b=>b.onclick=()=>openSheet(b.dataset.lvGoto,root));
+    el.querySelectorAll('[data-lv-more]').forEach(b=>b.onclick=()=>openVisitOptions(x,b.dataset.lvMore,b.dataset.lvVvenue,root));
     el.querySelectorAll('[data-lv-addat]').forEach(b=>b.onclick=async()=>{closeSheet();await openDetail(b.dataset.lvAddat);document.getElementById('vvAdd')?.click();});
     el.querySelector('#lvManage').onclick=()=>window.openStadiumManager(cur.teamOf||cur.id,()=>{window.renderLeaguesV2(root);openSheet(cur.id,root);});
     el.querySelector('#lvAddVisit').onclick=async()=>{closeSheet();await openDetail(cur.id);document.getElementById('vvAdd')?.click();};
@@ -184,7 +206,7 @@
         ${msg?`<div class="lv-note gold">${e(msg)}</div>`:''}
         ${list.map(v=>{const c=vis(v).length;return `<div class="lv-mg-venue"><div class="lv-mg-top"><strong>${e(v.venue)}</strong><small>${e(v.city)}${v.state?`, ${e(v.state)}`:''} · ${c} visit${c===1?'':'s'}${yearOf(v)?` · ${statusOf(v)==='former'?'closed':statusOf(v)==='coming'?'opens':'opened'} ${e(yearOf(v))}`:''}</small></div>
           <span class="lv-mg-label">Status</span><div class="lv-seg four" role="group" aria-label="Status for ${e(v.venue)}">${stBtn(v,'current','Main home')}${stBtn(v,'second','Second home')}${stBtn(v,'coming','Coming soon')}${stBtn(v,'former','Former')}</div>${onlyCurrent(v)?`<small class="lv-mg-lock">This is the team’s main stadium (stadium one). To replace it, mark another stadium Main home.</small>`:''}
-          ${v.teamOf?`<div class="lv-mg-actions"><button type="button" data-edit="${e(v.id)}">Edit name</button>${c?'':`<button type="button" class="danger" data-del="${e(v.id)}">Remove</button>`}</div>`:''}</div>`;}).join('')}
+          ${v.teamOf&&!v.builtin?`<div class="lv-mg-actions"><button type="button" data-edit="${e(v.id)}">Edit name</button>${c?'':`<button type="button" class="danger" data-del="${e(v.id)}">Remove</button>`}</div>`:''}</div>`;}).join('')}
         <form class="lv-mg-form" id="lvAddVenue"><strong>Add a new stadium</strong><p class="lv-mg-help">Use this for another arena where the team plays home games (Second home), a stadium being built, or one the team used before.</p>
           <label>Stadium name<input name="venue" required placeholder="New stadium name"></label>
           <div class="lv-mg-row"><label>City<input name="city" value="${e(base.city)}"></label><label>State<input name="state" value="${e(base.state)}" maxlength="3"></label></div>

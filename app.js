@@ -53,6 +53,20 @@ function saveVenueStore(){if(safeSetItem(VENUES_KEY,JSON.stringify(venueStore)))
 function syncAddedVenue(v){const base=STADIUMS.find(r=>r.id===v.teamOf);if(base){v.team=base.team;v.sport=base.sport;v.level=base.level;v.conference=base.conference;v.division=base.division;if(v.lat==null||v.lat===''){v.lat=base.lat;v.lng=base.lng;}}return v;}
 function installAddedVenues(){venueStore.added.forEach(v=>{if(!STADIUMS.some(r=>r.id===v.id))STADIUMS.push(syncAddedVenue({...v}));});}
 installAddedVenues();
+/* Built-in second homes (v44). They behave like stadiums you add, but ship with the app. */
+const BUILTIN_SECOND_HOMES=[
+  {id:'CBB-193-H1',teamOf:'CBB-193',venue:'Xfinity Mobile Arena',city:'Philadelphia',state:'PA',lat:39.9012,lng:-75.172,venueStatus:'second',builtin:true},
+  {id:'CBB-320-H1',teamOf:'CBB-320',venue:'McDonough Arena',city:'Washington',state:'DC',lat:38.9076,lng:-77.0757,venueStatus:'second',builtin:true}
+];
+(function installBuiltinSecondHomes(){
+  const norm=s=>String(s||'').toLowerCase().replace(/[^a-z0-9]/g,'');
+  const vill=STADIUMS.find(r=>r.id==='CBB-193');if(vill&&vill.venue==='The Pavilion'&&!teamEdits['CBB-193']?.venue)vill.venue='Finneran Pavilion';
+  BUILTIN_SECOND_HOMES.forEach(b=>{
+    if(STADIUMS.some(r=>r.id===b.id))return;
+    if(STADIUMS.some(r=>(r.teamOf||r.id)===b.teamOf&&norm(r.venue)===norm(b.venue)))return; // already added by hand
+    STADIUMS.push(syncAddedVenue({...b,capacity:'',opened:''}));
+  });
+})();
 (function repairVenueStatuses(){let changed=false;STADIUMS.forEach(x=>{if(x.teamOf)return;const st=venueStore.status[x.id]?.status;if(st&&st!=='current'&&!STADIUMS.some(v=>(v.teamOf||v.id)===x.id&&venueStore.status[v.id]?.status==='current'&&v.id!==x.id)){delete venueStore.status[x.id];changed=true;}});if(changed)safeSetItem(VENUES_KEY,JSON.stringify(venueStore));})();
 function storedVenueStatus(x){return venueStore.status[x?.id]?.status||x?.venueStatus||'current';}
 function venueStatus(x){const st=storedVenueStatus(x);if(st!=='current'&&x&&!x.teamOf&&!teamVenues(x).some(v=>storedVenueStatus(v)==='current'))return 'current';return st;}
@@ -64,8 +78,10 @@ const isCountedVenue=x=>isTrackedVenue(x)&&venueStatus(x)==='current';
    Each earns its own stamp; the team is checked off by a home game at its main stadium or any second home. */
 const isHomeStatus=st=>st==='current'||st==='second';
 function homeVenues(x){return teamVenues(x).filter(v=>isHomeStatus(venueStatus(v)));}
-function isHomeVisited(x){if(venueStatus(x)!=='current')return getVisits(x.id).length>0;return homeVenues(x).some(v=>getVisits(v.id).length>0);}
-function homeFirstVisitDate(x){if(venueStatus(x)!=='current')return firstVisitDate(x.id);const d=homeVenues(x).map(v=>firstVisitDate(v.id)).filter(Boolean).sort();return d[0]||'';}
+function isHomeGameAt(v,venueEntry){if(!v||v.neutralSite)return false;const t=normalizeTeamName(v.teamName||'');return !t||t===normalizeTeamName(venueEntry.team);}
+function homeGameVisits(x){return getVisits(x.id).filter(v=>isHomeGameAt(v,x));}
+function isHomeVisited(x){if(venueStatus(x)!=='current')return homeGameVisits(x).length>0;return homeVenues(x).some(v=>homeGameVisits(v).length>0);}
+function homeFirstVisitDate(x){const list=venueStatus(x)!=='current'?[x]:homeVenues(x);const d=list.flatMap(v=>homeGameVisits(v).map(g=>g.date)).filter(Boolean).sort();return d[0]||'';}
 const isListedVenue=x=>isTrackedVenue(x)&&venueStatus(x)!=='coming';
 function setVenueStatus(id,status,year){venueStore.status[id]={...(venueStore.status[id]||{}),status,year:year??venueStore.status[id]?.year??''};}
 function addTeamVenue(baseId,{venue,city,state,status,year}){
@@ -85,6 +101,20 @@ function applyVenueStatus(id,status,year){
 }
 function updateTeamVenue(id,{venue,city,state}){const rec=venueStore.added.find(v=>v.id===id),x=STADIUMS.find(r=>r.id===id);if(!rec||!x)return;Object.assign(rec,{venue,city,state});Object.assign(x,{venue,city,state});saveVenueStore();}
 function removeTeamVenue(id){if(getVisits(id).length)return false;venueStore.added=venueStore.added.filter(v=>v.id!==id);delete venueStore.status[id];const i=STADIUMS.findIndex(r=>r.id===id);if(i>=0)STADIUMS.splice(i,1);saveVenueStore();return true;}
+async function moveVisitToVenue(fromId,visitId,toId){
+  if(fromId===toId)return false;
+  const from=getVisits(fromId),i=from.findIndex(v=>v.id===visitId);if(i<0)return false;
+  const visit=from[i];
+  const legacy=visitId==='legacy';
+  const photos=await getPhotos(legacy?fromId:visitPhotoKey(fromId,visitId)),tickets=await getPhotos(visitTicketKey(fromId,visitId));
+  state[fromId]={...(state[fromId]||{}),visits:from.filter((_,j)=>j!==i)};
+  const to=getVisits(toId).slice();to.push({...visit,venueId:toId});state[toId]={...(state[toId]||{}),visits:to};
+  if(!saveState())return false;
+  if(photos.length){await putPhotos(visitPhotoKey(toId,visitId),photos);await putPhotos(legacy?fromId:visitPhotoKey(fromId,visitId),[]);}
+  if(tickets.length){await putPhotos(visitTicketKey(toId,visitId),tickets);await putPhotos(visitTicketKey(fromId,visitId),[]);}
+  return true;
+}
+function setVisitNeutral(stadiumId,visitId,neutral){const list=getVisits(stadiumId).map(v=>v.id===visitId?{...v,neutralSite:!!neutral}:v);state[stadiumId]={...(state[stadiumId]||{}),visits:list};return saveState();}
 function mergeVenueStore(inc){if(!inc||typeof inc!=='object')return;(inc.added||[]).forEach(v=>{if(v&&v.id&&!venueStore.added.some(a=>a.id===v.id)){venueStore.added.push(v);if(!STADIUMS.some(r=>r.id===v.id))STADIUMS.push(syncAddedVenue({...v}));}});for(const [k,v] of Object.entries(inc.status||{}))if(!(k in venueStore.status))venueStore.status[k]=v;saveVenueStore();}
 const $ = s => document.querySelector(s);
 
@@ -1125,7 +1155,7 @@ if('serviceWorker' in navigator&&location.protocol.startsWith('http'))window.add
 
 /* Video playback helper (v32): a tap on a paused video starts it directly, and if the phone can't
    play it, a short message appears on the video instead of a silent black box. */
-const APP_VERSION='v43';
+const APP_VERSION='v44';
 function videoTypeFor(el){const rec=videoObjectUrls.get(el.getAttribute('src'));return rec?guessVideoType(rec):'unknown';}
 function showVideoProblem(el,why){
   const holder=el.parentElement;if(!holder||holder.querySelector('.video-problem'))return;
