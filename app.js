@@ -60,6 +60,12 @@ function venueYear(x){return venueStore.status[x?.id]?.year||x?.opened||'';}
 const teamKeyOf=x=>x?.teamOf||x?.id;
 function teamVenues(x){const k=teamKeyOf(x);return STADIUMS.filter(r=>teamKeyOf(r)===k);}
 const isCountedVenue=x=>isTrackedVenue(x)&&venueStatus(x)==='current';
+/* Second homes (v43): a team can also play home games at other stadiums (e.g. St. John's at MSG).
+   Each earns its own stamp; the team is checked off by a home game at its main stadium or any second home. */
+const isHomeStatus=st=>st==='current'||st==='second';
+function homeVenues(x){return teamVenues(x).filter(v=>isHomeStatus(venueStatus(v)));}
+function isHomeVisited(x){if(venueStatus(x)!=='current')return getVisits(x.id).length>0;return homeVenues(x).some(v=>getVisits(v.id).length>0);}
+function homeFirstVisitDate(x){if(venueStatus(x)!=='current')return firstVisitDate(x.id);const d=homeVenues(x).map(v=>firstVisitDate(v.id)).filter(Boolean).sort();return d[0]||'';}
 const isListedVenue=x=>isTrackedVenue(x)&&venueStatus(x)!=='coming';
 function setVenueStatus(id,status,year){venueStore.status[id]={...(venueStore.status[id]||{}),status,year:year??venueStore.status[id]?.year??''};}
 function addTeamVenue(baseId,{venue,city,state,status,year}){
@@ -278,7 +284,7 @@ function bindAddVisitDialog(){
   dialog?.addEventListener('click',event=>{if(event.target===dialog)close();});
 }
 function renderSummary(){
-  const cards=trackedSports.map(s=>{const rows=STADIUMS.filter(x=>x.sport===s&&isCountedVenue(x)),v=rows.filter(x=>getEntry(x.id).visited).length,pct=rows.length?Math.round(v/rows.length*100):0;return `<div class="stat"><strong>${v}/${rows.length}</strong><span>${s} visited</span><div class="completion-bar"><span style="width:${pct}%"></span></div></div>`});
+  const cards=trackedSports.map(s=>{const rows=STADIUMS.filter(x=>x.sport===s&&isCountedVenue(x)),v=rows.filter(x=>isHomeVisited(x)).length,pct=rows.length?Math.round(v/rows.length*100):0;return `<div class="stat"><strong>${v}/${rows.length}</strong><span>${s} visited</span><div class="completion-bar"><span style="width:${pct}%"></span></div></div>`});
   $("#summary").innerHTML=cards.join("");
 }
 const logoCache = JSON.parse(localStorage.getItem("stadiumPassportLogoCacheV2") || "{}");
@@ -441,14 +447,14 @@ function renderChecklist(){
   const html=trackedSports.map(sport=>{
     const rows=STADIUMS.filter(x=>x.sport===sport&&isCountedVenue(x));
     const conferences=[...new Set(rows.map(x=>x.conference))].sort((a,b)=>a.localeCompare(b));
-    return `<section class="checklist-league"><div class="checklist-league-heading"><h2>${leagueNames[sport]}</h2><span>${rows.filter(x=>getEntry(x.id).visited).length}/${rows.length} visited</span></div>${conferences.map(conf=>{const cr=rows.filter(x=>x.conference===conf),divisions=[...new Set(cr.map(x=>x.division||"Other"))];return `<div class="checklist-conference"><h3>${headingWithBadge(conf,'conference',sport,conf)}</h3>${divisions.map(div=>`<div class="checklist-division"><h4>${headingWithBadge(div,'division',sport,conf)}</h4><div class="checklist-grid">${cr.filter(x=>(x.division||"Other")===div).sort((a,b)=>a.team.localeCompare(b.team)).map(checklistItem).join("")}</div></div>`).join("")}</div>`;}).join("")}</section>`;
+    return `<section class="checklist-league"><div class="checklist-league-heading"><h2>${leagueNames[sport]}</h2><span>${rows.filter(x=>isHomeVisited(x)).length}/${rows.length} visited</span></div>${conferences.map(conf=>{const cr=rows.filter(x=>x.conference===conf),divisions=[...new Set(cr.map(x=>x.division||"Other"))];return `<div class="checklist-conference"><h3>${headingWithBadge(conf,'conference',sport,conf)}</h3>${divisions.map(div=>`<div class="checklist-division"><h4>${headingWithBadge(div,'division',sport,conf)}</h4><div class="checklist-grid">${cr.filter(x=>(x.division||"Other")===div).sort((a,b)=>a.team.localeCompare(b.team)).map(checklistItem).join("")}</div></div>`).join("")}</div>`;}).join("")}</section>`;
   }).join("");
   $("#content").innerHTML=`<section class="checklist-intro"><p class="eyebrow">COMPLETE VENUE LIST</p><h2>Your stadium checklist</h2><p>Teams turn green after you save a visit. Tap any team to view or update its entry.</p></section>${html}${mapSection('All visited venues')}`;
   $("#content").querySelectorAll(".checklist-item").forEach(el=>el.onclick=()=>openDetail(el.dataset.id));
   hydrateOverviewLogos();
   initVisitedMap(STADIUMS.filter(x=>getEntry(x.id).visited));
 }
-function checklistItem(x){const e=getEntry(x.id);return `<button type="button" class="checklist-item ${e.visited?'visited':''}" data-id="${x.id}"><span class="checklist-dot">${e.visited?'✓':'○'}</span><span class="list-team-logo"><img data-logo-sport="${x.sport}" data-logo-name="${escapeHtml(x.team)}" alt="${escapeHtml(x.team)} logo" hidden></span><span class="checklist-team-copy"><strong>${escapeHtml(x.team)}</strong><small>${escapeHtml(x.venue)}</small></span></button>`;}
+function checklistItem(x){const e={...getEntry(x.id),visited:isHomeVisited(x)};return `<button type="button" class="checklist-item ${e.visited?'visited':''}" data-id="${x.id}"><span class="checklist-dot">${e.visited?'✓':'○'}</span><span class="list-team-logo"><img data-logo-sport="${x.sport}" data-logo-name="${escapeHtml(x.team)}" alt="${escapeHtml(x.team)} logo" hidden></span><span class="checklist-team-copy"><strong>${escapeHtml(x.team)}</strong><small>${escapeHtml(x.venue)}</small></span></button>`;}
 
 
 const US_STATE_NAMES={AL:"Alabama",AK:"Alaska",AZ:"Arizona",AR:"Arkansas",CA:"California",CO:"Colorado",CT:"Connecticut",DE:"Delaware",FL:"Florida",GA:"Georgia",HI:"Hawaii",ID:"Idaho",IL:"Illinois",IN:"Indiana",IA:"Iowa",KS:"Kansas",KY:"Kentucky",LA:"Louisiana",ME:"Maine",MD:"Maryland",MA:"Massachusetts",MI:"Michigan",MN:"Minnesota",MS:"Mississippi",MO:"Missouri",MT:"Montana",NE:"Nebraska",NV:"Nevada",NH:"New Hampshire",NJ:"New Jersey",NM:"New Mexico",NY:"New York",NC:"North Carolina",ND:"North Dakota",OH:"Ohio",OK:"Oklahoma",OR:"Oregon",PA:"Pennsylvania",RI:"Rhode Island",SC:"South Carolina",SD:"South Dakota",TN:"Tennessee",TX:"Texas",UT:"Utah",VT:"Vermont",VA:"Virginia",WA:"Washington",WV:"West Virginia",WI:"Wisconsin",WY:"Wyoming",DC:"District of Columbia"};
@@ -492,7 +498,7 @@ async function renderScratchMap(selectedSport="NFL"){
   setTimeout(()=>currentMap&&currentMap.invalidateSize(),50);
 }
 function firstVisitDate(id){return getVisits(id).map(v=>v.date).filter(Boolean).sort()[0]||'';}
-function completionDate(rows){const dates=rows.map(x=>firstVisitDate(x.id));return dates.every(Boolean)?dates.sort().at(-1):'';}
+function completionDate(rows){const dates=rows.map(x=>homeFirstVisitDate(x));return dates.every(Boolean)?dates.sort().at(-1):'';}
 function badge(icon,title,description,unlocked,date=''){
   return `<article class="achievement-card ${unlocked?'unlocked':'locked'}"><div class="achievement-icon">${unlocked?icon:'🔒'}</div><div><p class="achievement-status">${unlocked?'UNLOCKED':'LOCKED'}</p><h3>${escapeHtml(title)}</h3><p>${escapeHtml(description)}</p>${unlocked?`<small>${date?`Earned ${formatDate(date)}`:'Achievement earned'}</small>`:''}</div></article>`;
 }
@@ -1119,7 +1125,7 @@ if('serviceWorker' in navigator&&location.protocol.startsWith('http'))window.add
 
 /* Video playback helper (v32): a tap on a paused video starts it directly, and if the phone can't
    play it, a short message appears on the video instead of a silent black box. */
-const APP_VERSION='v42';
+const APP_VERSION='v43';
 function videoTypeFor(el){const rec=videoObjectUrls.get(el.getAttribute('src'));return rec?guessVideoType(rec):'unknown';}
 function showVideoProblem(el,why){
   const holder=el.parentElement;if(!holder||holder.querySelector('.video-problem'))return;
