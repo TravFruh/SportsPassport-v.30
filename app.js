@@ -1108,7 +1108,10 @@ async function openDetail(id,selectedVisitId=""){
     const add=$("#addVisit");if(add)add.onclick=()=>{activeId='';mode='edit';draw();};
     const back=$("#backToView");if(back)back.onclick=()=>{if(isNew)activeId=latestVisitId();mode='view';draw();};
     const wireGallery=()=>{$("#photoGallery").innerHTML=gallery();$("#photoGallery").querySelectorAll('.remove-photo').forEach(b=>b.onclick=async()=>{photos.splice(Number(b.dataset.index),1);await putPhotos(visitPhotoKey(id,visit.id),photos);wireGallery();});};wireGallery();
-    $("#photoInput").onchange=async ev=>{const files=[...ev.target.files];if(!files.length)return;try{for(const f of files){if(f.type.startsWith('video/')){if(f.size>100*1024*1024){alert(`${f.name} is larger than 100 MB and was not added.`);continue;}const blob=await f.arrayBuffer().then(buf=>new Blob([buf],{type:f.type||'video/mp4'}));const record={kind:'video',id:(crypto.randomUUID?.()||`video-${Date.now()}-${Math.random()}`),mime:f.type||blob.type||'video/mp4',blob};const url=URL.createObjectURL(blob);videoObjectUrls.set(url,record);photos.push(url);}else if(f.type.startsWith('image/')){photos.push(await resizeImage(f,1200,.82));}}await putPhotos(visitPhotoKey(id,visit.id),photos);wireGallery();}catch(err){console.error(err);alert('One or more files could not be added.');}finally{ev.target.value='';}};
+    $("#photoInput").onchange=async ev=>{const files=[...ev.target.files];if(!files.length)return;try{for(let f of files){const isVid=f.type.startsWith('video/')||(!f.type&&/\.(mov|mp4|m4v|webm|3gp)$/i.test(f.name||''));if(isVid){const LIMIT=100*1024*1024,SUGGEST=60*1024*1024;
+  if(f.size>SUGGEST&&typeof window.shrinkVideoFlow==='function'){const out=await window.shrinkVideoFlow(f,{limit:LIMIT,allowOriginal:f.size<=LIMIT});if(!out)continue;f=out;}
+  if(f.size>LIMIT){alert(`${f.name||'This video'} is ${(f.size/1048576).toFixed(0)} MB, which is larger than the 100 MB limit, so it was not added.`);continue;}
+  const blob=await f.arrayBuffer().then(buf=>new Blob([buf],{type:f.type||'video/mp4'}));const record={kind:'video',id:(crypto.randomUUID?.()||`video-${Date.now()}-${Math.random()}`),mime:f.type||blob.type||'video/mp4',blob};const url=URL.createObjectURL(blob);videoObjectUrls.set(url,record);photos.push(url);}else if(f.type.startsWith('image/')){photos.push(await resizeImage(f,1200,.82));}}await putPhotos(visitPhotoKey(id,visit.id),photos);wireGallery();}catch(err){console.error(err);alert('One or more files could not be added.');}finally{ev.target.value='';}};
     const wireTicket=()=>{const box=$("#ticketPreview");box.innerHTML=ticketScans.length?`<div class="ticket-scan-card"><img src="${ticketScans[0]}" alt="Ticket scan for ${escapeHtml(x.team)}"><button type="button" id="removeTicket" class="danger-outline">Remove ticket scan</button></div>`:'<div class="ticket-empty">No ticket scan attached</div>';const remove=$("#removeTicket");if(remove)remove.onclick=async()=>{ticketScans=[];await putPhotos(visitTicketKey(id,visit.id),ticketScans);wireTicket();};};wireTicket();
     $("#ticketInput").onchange=async ev=>{const f=ev.target.files[0];if(!f)return;ticketScans=[await resizeImage(f,1600,.86)];await putPhotos(visitTicketKey(id,visit.id),ticketScans);wireTicket();ev.target.value='';};
 
@@ -1155,7 +1158,7 @@ if('serviceWorker' in navigator&&location.protocol.startsWith('http'))window.add
 
 /* Video playback helper (v32): a tap on a paused video starts it directly, and if the phone can't
    play it, a short message appears on the video instead of a silent black box. */
-const APP_VERSION='v44';
+const APP_VERSION='v45';
 function videoTypeFor(el){const rec=videoObjectUrls.get(el.getAttribute('src'));return rec?guessVideoType(rec):'unknown';}
 function showVideoProblem(el,why){
   const holder=el.parentElement;if(!holder||holder.querySelector('.video-problem'))return;

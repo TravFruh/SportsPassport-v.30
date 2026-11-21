@@ -1112,3 +1112,17 @@ button.secondary{color:#fff;border-color:rgba(255,255,255,.5);background:rgba(8,
 .lv-opt{width:100%;border:1px solid #e5e7eb;border-radius:14px;background:#fff;padding:12px 14px;display:flex;flex-direction:column;gap:2px;text-align:left;cursor:pointer;color:#111827;min-height:56px}
 .lv-opt strong{font-size:15px}.lv-opt small{font-size:13px;color:#4b5563}
 .lv-opt.on{border:2px solid #142038;background:#f8fafc}
+
+/* ===== v45: shrink large videos ===== */
+.vs-overlay{position:fixed;inset:0;z-index:3000;background:rgba(17,24,39,.6);display:flex;align-items:center;justify-content:center;padding:20px;box-sizing:border-box}
+.vs-card{width:100%;max-width:420px;background:#fff;border-radius:20px;padding:20px;display:flex;flex-direction:column;gap:12px;color:#111827;box-shadow:0 20px 50px rgba(0,0,0,.35)}
+.vs-title{font-size:18px}
+.vs-text{margin:0;font-size:14px;line-height:1.5;color:#374151}
+.vs-progress{display:flex;flex-direction:column;gap:6px}
+.vs-bar{display:block;height:10px;border-radius:5px;background:#e5e7eb;overflow:hidden}.vs-bar i{display:block;height:100%;width:0;background:#15803d;transition:width .3s}
+.vs-status{font-size:13px;color:#374151}
+.vs-actions{display:flex;flex-direction:column;gap:8px}
+.vs-actions button{min-height:48px;border-radius:12px;font-weight:700;font-size:15px;cursor:pointer;border:1px solid #d1d5db;background:#fff;color:#142038}
+.vs-actions .vs-go{background:#142038;color:#fff;border:0}
+.vs-actions .vs-go:disabled{opacity:.6}
+.vs-progress[hidden],.vs-actions button[hidden]{display:none}
